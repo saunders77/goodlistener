@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>goodlistener | Web Audio Test Bench</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <main class="page-shell">
+    <section class="hero">
+      <p class="eyebrow">goodlistener</p>
+      <h1>Web Audio Test Bench</h1>
+      <p class="hero-copy">
+        Spin up as many oscillators as you want, shape them independently, and hear changes in real time.
+        Start audio once, then add voices as you go.
+      </p>
+
+      <div class="global-panel">
+        <div class="global-actions">
+          <button id="start-audio" class="primary-button" type="button">Start Audio</button>
+          <button id="add-oscillator" class="secondary-button" type="button">Add Oscillator</button>
+        </div>
+
+        <label class="global-control">
+          <span>Master Volume</span>
+          <input id="master-volume" type="range" min="0" max="1" step="0.01" value="0.75">
+          <strong id="master-volume-value">75%</strong>
+        </label>
+
+        <p id="audio-status" class="status-text">
+          Audio is idle until you click Start Audio or Add Oscillator.
+        </p>
+      </div>
+    </section>
+
+    <section class="oscillator-section">
+      <div class="section-heading">
+        <div>
+          <p class="section-kicker">Voices</p>
+          <h2>Oscillators</h2>
+        </div>
+        <p class="section-note">
+          Each card has its own output, modulation, panning, and effects chain.
+        </p>
+      </div>
+
+      <div id="oscillator-list" class="oscillator-list" aria-live="polite"></div>
+    </section>
+  </main>
+
+  <template id="oscillator-template">
+    <article class="oscillator-card">
+      <div class="oscillator-header">
+        <div>
+          <p class="card-kicker">Signal Path</p>
+          <h3 class="oscillator-title">Oscillator</h3>
+        </div>
+        <div class="oscillator-actions">
+          <label class="toggle">
+            <input data-control="active" type="checkbox">
+            <span>On</span>
+          </label>
+          <button data-action="remove" class="ghost-button" type="button">Remove</button>
+        </div>
+      </div>
+
+      <div class="control-grid">
+        <label class="control">
+          <span class="control-label">Waveform</span>
+          <select data-control="waveform">
+            <option value="sine">Sine</option>
+            <option value="triangle">Triangle</option>
+            <option value="square">Square</option>
+            <option value="sawtooth">Sawtooth</option>
+          </select>
+        </label>
+
+        <label class="control">
+          <span class="control-label">Volume</span>
+          <input data-control="volume" type="range" min="0" max="1" step="0.01" value="0.25">
+          <strong data-value="volume">25%</strong>
+        </label>
+
+        <label class="control">
+          <span class="control-label">Frequency</span>
+          <input data-control="frequency" type="range" min="20" max="2000" step="1" value="220">
+          <strong data-value="frequency">220 Hz</strong>
+        </label>
+
+        <label class="control">
+          <span class="control-label">Detune</span>
+          <input data-control="detune" type="range" min="-1200" max="1200" step="1" value="0">
+          <strong data-value="detune">0 cents</strong>
+        </label>
+
+        <label class="control">
+          <span class="control-label">Vibrato Depth</span>
+          <input data-control="vibratoDepth" type="range" min="0" max="100" step="0.1" value="0">
+          <strong data-value="vibratoDepth">0.0 Hz</strong>
+        </label>
+
+        <label class="control">
+          <span class="control-label">Vibrato Speed</span>
+          <input data-control="vibratoRate" type="range" min="0.1" max="20" step="0.1" value="5">
+          <strong data-value="vibratoRate">5.0 Hz</strong>
+        </label>
+
+        <label class="control">
+          <span class="control-label">Pan</span>
+          <input data-control="pan" type="range" min="-1" max="1" step="0.01" value="0">
+          <strong data-value="pan">Center</strong>
+        </label>
+
+        <label class="control">
+          <span class="control-label">Filter Cutoff</span>
+          <input data-control="filterCutoff" type="range" min="80" max="12000" step="1" value="12000">
+          <strong data-value="filterCutoff">12000 Hz</strong>
+        </label>
+
+        <label class="control">
+          <span class="control-label">Filter Resonance</span>
+          <input data-control="filterQ" type="range" min="0.1" max="20" step="0.1" value="0.7">
+          <strong data-value="filterQ">0.7 Q</strong>
+        </label>
+
+        <label class="control">
+          <span class="control-label">Distortion</span>
+          <input data-control="distortion" type="range" min="0" max="100" step="1" value="0">
+          <strong data-value="distortion">0%</strong>
+        </label>
+
+        <label class="control">
+          <span class="control-label">Delay Time</span>
+          <input data-control="delayTime" type="range" min="0" max="0.8" step="0.01" value="0.18">
+          <strong data-value="delayTime">0.18 s</strong>
+        </label>
+
+        <label class="control">
+          <span class="control-label">Delay Mix</span>
+          <input data-control="delayMix" type="range" min="0" max="1" step="0.01" value="0.12">
+          <strong data-value="delayMix">12%</strong>
+        </label>
+
+        <label class="control">
+          <span class="control-label">Delay Feedback</span>
+          <input data-control="delayFeedback" type="range" min="0" max="0.9" step="0.01" value="0.2">
+          <strong data-value="delayFeedback">20%</strong>
+        </label>
+      </div>
+    </article>
+  </template>
+
+  <script src="audio-engine.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
