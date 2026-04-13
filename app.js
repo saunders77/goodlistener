@@ -134,9 +134,13 @@
     output.tabIndex = 0;
     output.title = "Click to type a value and press Enter";
 
-    function restoreFormattedValue() {
+    function finishEditing(nextText) {
       output.classList.remove("is-editing");
-      output.textContent = formatValue(controlName, Number(input.value));
+      output.textContent = nextText;
+    }
+
+    function restoreFormattedValue() {
+      finishEditing(formatValue(controlName, Number(input.value)));
     }
 
     function startEditing() {
@@ -175,6 +179,7 @@
 
           committed = true;
           applyNumericControlValue(input, output, controlName, onUpdate, parsedValue);
+          output.classList.remove("is-editing");
           audioStatus.textContent = statusLabel + " updated.";
           output.focus();
           return;
