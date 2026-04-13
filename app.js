@@ -5,6 +5,7 @@
   var template = document.getElementById("oscillator-template");
   var startAudioButton = document.getElementById("start-audio");
   var addOscillatorButton = document.getElementById("add-oscillator");
+  var addOscillatorFloatingButton = document.getElementById("add-oscillator-floating");
   var masterVolumeInput = document.getElementById("master-volume");
   var masterVolumeValue = document.getElementById("master-volume-value");
   var stateCodeInput = document.getElementById("state-code");
@@ -480,6 +481,18 @@
     refreshStateCode();
   }
 
+  function handleAddOscillator() {
+    audio.start()
+      .then(function () {
+        startAudioButton.textContent = "Audio Ready";
+        startAudioButton.disabled = true;
+        createOscillatorCard();
+      })
+      .catch(function (error) {
+        audioStatus.textContent = error.message;
+      });
+  }
+
   startAudioButton.addEventListener("click", function () {
     audio.start()
       .then(function () {
@@ -492,17 +505,8 @@
       });
   });
 
-  addOscillatorButton.addEventListener("click", function () {
-    audio.start()
-      .then(function () {
-        startAudioButton.textContent = "Audio Ready";
-        startAudioButton.disabled = true;
-        createOscillatorCard();
-      })
-      .catch(function (error) {
-        audioStatus.textContent = error.message;
-      });
-  });
+  addOscillatorButton.addEventListener("click", handleAddOscillator);
+  addOscillatorFloatingButton.addEventListener("click", handleAddOscillator);
 
   masterVolumeInput.addEventListener("input", function () {
     var value = Number(masterVolumeInput.value);
