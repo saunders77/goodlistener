@@ -87,6 +87,16 @@
       font-size: 0.9rem;
     }
 
+    .audio-note {
+      margin: 0.8rem 0 0;
+      color: #d9e6f5;
+      font-size: 0.95rem;
+    }
+
+    .audio-note strong {
+      color: #f6edb7;
+    }
+
     .views {
       display: grid;
       gap: 1rem;
@@ -168,6 +178,9 @@
         <span>A / Left and D / Right: turn</span>
         <span>120 Hz simulation step</span>
       </div>
+      <p id="audio-status" class="audio-note">
+        <strong>Audio:</strong> press a movement key or click anywhere to start the mosquito sound.
+      </p>
     </section>
 
     <section class="views">
@@ -199,6 +212,8 @@
     </section>
   </main>
 
+  <script src="game/mosquito-code.js"></script>
+  <script src="game/game-audio.js"></script>
   <script src="game/game.js"></script>
 </body>
 </html>

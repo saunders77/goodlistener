@@ -6,6 +6,8 @@
 
   const WORLD_WIDTH = SCREEN_WIDTH;
   const WORLD_DEPTH = SCREEN_HEIGHT;
+  const WORLD_DEPTH_FEET = 48;
+  const WORLD_UNITS_PER_FOOT = WORLD_DEPTH / WORLD_DEPTH_FEET;
 
   const HORIZONTAL_FOV = 65 * Math.PI / 180;
   const HALF_FOV = HORIZONTAL_FOV / 2;
@@ -50,6 +52,7 @@
 
   const mapCanvas = document.getElementById("map-view");
   const firstPersonCanvas = document.getElementById("first-person-view");
+  const audioStatus = document.getElementById("audio-status");
   const mapCtx = mapCanvas.getContext("2d");
   const firstPersonCtx = firstPersonCanvas.getContext("2d");
 
@@ -72,8 +75,8 @@
     }
   );
 
-  drawStatus(mapCtx, "Loading assets", "Preparing mosquito and tree sprites...");
-  drawStatus(firstPersonCtx, "Loading assets", "Preparing mosquito and tree sprites...");
+  drawStatus(mapCtx, "Loading assets", "Preparing mosquito, tree, and sound assets...");
+  drawStatus(firstPersonCtx, "Loading assets", "Preparing mosquito, tree, and sound assets...");
 
   Promise.all([
     loadImage("game/mosquito.png"),
@@ -84,8 +87,9 @@
     })
     .catch((error) => {
       console.error(error);
-      drawStatus(mapCtx, "Asset load failed", "Check game/mosquito.png and game/tree.png.");
+      drawStatus(mapCtx, "Asset load failed", "Check /game assets and mosquito.txt.");
       drawStatus(firstPersonCtx, "Asset load failed", "Check the browser console for details.");
+      setAudioStatus("Audio unavailable because the game assets did not finish loading.");
     });
 
   function startGame(mosquitoImage, treeImage) {
@@ -124,9 +128,19 @@
         height: mosquitoWorldHeight
       }
     };
+    const mosquitoSoundCode = getMosquitoSoundCode();
+    const mosquitoAudio = new window.GoodListenerGameAudio.MosquitoAudio(mosquitoSoundCode);
+    let audioRunning = false;
 
     mapCtx.imageSmoothingEnabled = true;
     firstPersonCtx.imageSmoothingEnabled = true;
+
+    updateMosquitoAudio();
+    setAudioStatus(
+      `Ready. Press a movement key or click to start mosquito audio. Oscillators normalized by ${formatSignedNumber(mosquitoAudio.normalizationDb)} dB, then trimmed ${mosquitoAudio.outputTrimDb.toFixed(1)} dB at the output.`
+    );
+
+    window.addEventListener("pointerdown", enableMosquitoAudio);
 
     window.addEventListener(
       "keydown",
@@ -136,6 +150,7 @@
           return;
         }
 
+        enableMosquitoAudio();
         input[action] = true;
         event.preventDefault();
       },
@@ -183,16 +198,16 @@
 
       state.bat.angle = wrapAngle(state.bat.angle + turnDirection * TURN_SPEED * dt);
 
-      if (!moveDirection) {
-        return;
+      if (moveDirection) {
+        const stepDistance = MOVE_SPEED * moveDirection * dt;
+        const nextX = state.bat.x + Math.sin(state.bat.angle) * stepDistance;
+        const nextY = state.bat.y + Math.cos(state.bat.angle) * stepDistance;
+
+        state.bat.x = clamp(nextX, BOUNDARY.west + PLAYER_RADIUS, BOUNDARY.east - PLAYER_RADIUS);
+        state.bat.y = clamp(nextY, BOUNDARY.south + PLAYER_RADIUS, BOUNDARY.north - PLAYER_RADIUS);
       }
 
-      const stepDistance = MOVE_SPEED * moveDirection * dt;
-      const nextX = state.bat.x + Math.sin(state.bat.angle) * stepDistance;
-      const nextY = state.bat.y + Math.cos(state.bat.angle) * stepDistance;
-
-      state.bat.x = clamp(nextX, BOUNDARY.west + PLAYER_RADIUS, BOUNDARY.east - PLAYER_RADIUS);
-      state.bat.y = clamp(nextY, BOUNDARY.south + PLAYER_RADIUS, BOUNDARY.north - PLAYER_RADIUS);
+      updateMosquitoAudio();
     }
 
     function render() {
@@ -316,6 +331,38 @@
       }
 
       drawFirstPersonHud(firstPersonCtx);
+    }
+
+    function enableMosquitoAudio() {
+      mosquitoAudio.start()
+        .then(() => {
+          if (audioRunning) {
+            return;
+          }
+
+          audioRunning = true;
+          setAudioStatus("Audio on. Mosquito gain and pan are smoothed while the bat moves and turns.");
+        })
+        .catch((error) => {
+          console.error(error);
+          setAudioStatus("Audio could not be started in this browser.");
+        });
+    }
+
+    function updateMosquitoAudio() {
+      const dx = state.mosquito.x - state.bat.x;
+      const dy = state.mosquito.y - state.bat.y;
+      const distanceFeet = Math.hypot(dx, dy) / WORLD_UNITS_PER_FOOT;
+      const forwardX = Math.sin(state.bat.angle);
+      const forwardY = Math.cos(state.bat.angle);
+      const rightX = Math.cos(state.bat.angle);
+      const rightY = -Math.sin(state.bat.angle);
+      const lateralOffset = dx * rightX + dy * rightY;
+      const forwardOffset = dx * forwardX + dy * forwardY;
+      const planarDistance = Math.hypot(lateralOffset, forwardOffset);
+      const pan = planarDistance < 0.0001 ? 0 : 0.9 * (lateralOffset / planarDistance);
+
+      mosquitoAudio.updateSpatial(distanceFeet, pan);
     }
   }
 
@@ -523,7 +570,7 @@
 
   function drawMapHud(ctx) {
     ctx.fillStyle = "rgba(6, 11, 20, 0.62)";
-    ctx.fillRect(18, 18, 476, 82);
+    ctx.fillRect(18, 18, 476, 102);
 
     ctx.fillStyle = "#eef6ff";
     ctx.font = '700 16px "Trebuchet MS", "Lucida Sans Unicode", sans-serif';
@@ -533,11 +580,12 @@
     ctx.font = '14px "Trebuchet MS", "Lucida Sans Unicode", sans-serif';
     ctx.fillText("Bat: move with W/S or arrows, turn with A/D or arrows", 32, 68);
     ctx.fillText("Mosquito sprite: game/mosquito.png. Boundary: repeated tree sprites.", 32, 88);
+    ctx.fillText("Mosquito audio: 2 dB quieter at max, then amplitude falls as 1/d after 1 ft.", 32, 108);
   }
 
   function drawFirstPersonHud(ctx) {
     ctx.fillStyle = "rgba(6, 11, 20, 0.62)";
-    ctx.fillRect(18, 18, 448, 72);
+    ctx.fillRect(18, 18, 484, 92);
 
     ctx.fillStyle = "#eef6ff";
     ctx.font = '700 16px "Trebuchet MS", "Lucida Sans Unicode", sans-serif';
@@ -546,6 +594,7 @@
     ctx.fillStyle = "#a9bad0";
     ctx.font = '14px "Trebuchet MS", "Lucida Sans Unicode", sans-serif';
     ctx.fillText("Tree height = 2x flight height. 120 Hz fixed simulation step.", 32, 68);
+    ctx.fillText("Mosquito mix pans smoothly: +/-90 degrees maps to +/-90% pan.", 32, 88);
   }
 
   function drawStatus(ctx, title, detail) {
@@ -619,5 +668,28 @@
       wrapped += circle;
     }
     return wrapped;
+  }
+
+  function setAudioStatus(message) {
+    if (!audioStatus) {
+      return;
+    }
+
+    audioStatus.innerHTML = `<strong>Audio:</strong> ${message}`;
+  }
+
+  function formatSignedNumber(value) {
+    const rounded = Number(value).toFixed(1);
+    return value >= 0 ? `+${rounded}` : rounded;
+  }
+
+  function getMosquitoSoundCode() {
+    const assets = window.GoodListenerGameAssets;
+
+    if (!assets || typeof assets.mosquitoSoundCode !== "string") {
+      throw new Error("Mosquito sound code is not available.");
+    }
+
+    return assets.mosquitoSoundCode;
   }
 })();
