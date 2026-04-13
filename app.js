@@ -14,6 +14,7 @@
   var audioStatus = document.getElementById("audio-status");
   var suppressStateRefresh = false;
   var DEFAULT_MASTER_VOLUME = -2.5;
+  var COMPACT_STATE_PREFIX = "g2:";
   var LOG_CONTROL_RANGES = {
     frequency: {
       min: 20,
@@ -39,6 +40,66 @@
     delayTime: 0.18,
     delayMix: 0.12,
     delayFeedback: 0.2
+  };
+  var SERIALIZATION_ORDER = [
+    "active",
+    "waveform",
+    "volume",
+    "frequency",
+    "detune",
+    "vibratoDepth",
+    "vibratoRate",
+    "pan",
+    "filterCutoff",
+    "filterQ",
+    "distortion",
+    "delayTime",
+    "delayMix",
+    "delayFeedback"
+  ];
+  var CONTROL_ALIASES = {
+    active: "a",
+    waveform: "w",
+    volume: "v",
+    frequency: "f",
+    detune: "d",
+    vibratoDepth: "x",
+    vibratoRate: "y",
+    pan: "p",
+    filterCutoff: "c",
+    filterQ: "q",
+    distortion: "o",
+    delayTime: "t",
+    delayMix: "m",
+    delayFeedback: "b"
+  };
+  var ALIAS_TO_CONTROL = {
+    a: "active",
+    w: "waveform",
+    v: "volume",
+    f: "frequency",
+    d: "detune",
+    x: "vibratoDepth",
+    y: "vibratoRate",
+    p: "pan",
+    c: "filterCutoff",
+    q: "filterQ",
+    o: "distortion",
+    t: "delayTime",
+    m: "delayMix",
+    b: "delayFeedback"
+  };
+  var WAVEFORM_ALIASES = {
+    sine: "s",
+    triangle: "t",
+    square: "q",
+    sawtooth: "w"
+  };
+  var ALIAS_TO_WAVEFORM = {
+    s: "sine",
+    t: "triangle",
+    q: "square",
+    w: "sawtooth"
   };
 
   function formatValue(control, value) {
@@ -77,6 +138,30 @@
 
   function updateMasterVolumeLabel(value) {
     masterVolumeValue.textContent = formatValue("volume", value);
+  }
+
+  function normalizeNumberForCode(value) {
+    var normalized = Number(Number(value).toFixed(4)).toString();
+
+    if (normalized.indexOf("-0.") === 0) {
+      return "-." + normalized.slice(3);
+    }
+
+    if (normalized.indexOf("0.") === 0) {
+      return "." + normalized.slice(2);
+    }
+
+    return normalized;
+  }
+
+  function valuesMatchDefault(controlName, value) {
+    var defaultValue = DEFAULT_OSCILLATOR_SETTINGS[controlName];
+
+    if (typeof defaultValue === "number") {
+      return Math.abs(Number(value) - defaultValue) < 0.0001;
+    }
+
+    return value === defaultValue;
   }
 
   function isLogarithmicControl(controlName) {
@@ -130,12 +215,125 @@
     return Number(input.value);
   }
 
-  function encodeState(state) {
-    return window.btoa(unescape(encodeURIComponent(JSON.stringify(state))));
+  function serializeOscillator(settings) {
+    var tokens = [];
+
+    SERIALIZATION_ORDER.forEach(function (controlName) {
+      var value = settings[controlName];
+
+      if (controlName === "active") {
+        if (value) {
+          tokens.push(CONTROL_ALIASES.active);
+        }
+        return;
+      }
+
+      if (controlName === "waveform") {
+        if (!valuesMatchDefault(controlName, value)) {
+          tokens.push(CONTROL_ALIASES.waveform + WAVEFORM_ALIASES[value]);
+        }
+        return;
+      }
+
+      if (valuesMatchDefault(controlName, value)) {
+        return;
+      }
+
+      tokens.push(CONTROL_ALIASES[controlName] + normalizeNumberForCode(value));
+    });
+
+    return tokens.join(",");
+  }
+
+  function serializeState(state) {
+    if (!state.oscillators.length) {
+      return COMPACT_STATE_PREFIX.slice(0, -1);
+    }
+
+    return COMPACT_STATE_PREFIX + state.oscillators.map(serializeOscillator).join("|");
+  }
+
+  function decodeLegacyState(code) {
+    return JSON.parse(decodeURIComponent(escape(window.atob(code.trim()))));
+  }
+
+  function parseCompactOscillator(serializedOscillator) {
+    var settings = Object.assign({}, DEFAULT_OSCILLATOR_SETTINGS);
+
+    if (!serializedOscillator || serializedOscillator === "_") {
+      return settings;
+    }
+
+    serializedOscillator.split(",").forEach(function (token) {
+      var alias = token.charAt(0);
+      var controlName = ALIAS_TO_CONTROL[alias];
+      var rawValue = token.slice(1);
+      var numericValue;
+
+      if (!controlName) {
+        throw new Error("Unknown control alias.");
+      }
+
+      if (controlName === "active") {
+        settings.active = true;
+        return;
+      }
+
+      if (controlName === "waveform") {
+        if (!ALIAS_TO_WAVEFORM[rawValue]) {
+          throw new Error("Unknown waveform alias.");
+        }
+
+        settings.waveform = ALIAS_TO_WAVEFORM[rawValue];
+        return;
+      }
+
+      numericValue = Number.parseFloat(rawValue);
+
+      if (!Number.isFinite(numericValue)) {
+        throw new Error("Invalid numeric value.");
+      }
+
+      settings[controlName] = numericValue;
+    });
+
+    return settings;
+  }
+
+  function decodeCompactState(code) {
+    var trimmed = code.trim();
+    var payload;
+
+    if (trimmed === COMPACT_STATE_PREFIX.slice(0, -1)) {
+      return {
+        version: 2,
+        oscillators: []
+      };
+    }
+
+    if (!trimmed.startsWith(COMPACT_STATE_PREFIX)) {
+      throw new Error("Not a compact state code.");
+    }
+
+    payload = trimmed.slice(COMPACT_STATE_PREFIX.length);
+
+    return {
+      version: 2,
+      oscillators: payload.split("|").map(parseCompactOscillator)
+    };
   }
 
   function decodeState(code) {
-    return JSON.parse(decodeURIComponent(escape(window.atob(code.trim()))));
+    var trimmed = code.trim();
+
+    if (
+      trimmed === COMPACT_STATE_PREFIX.slice(0, -1) ||
+      trimmed.indexOf(COMPACT_STATE_PREFIX) === 0
+    ) {
+      return decodeCompactState(trimmed);
+    }
+
+    return decodeLegacyState(trimmed);
   }
 
   function readControlValue(input) {
@@ -156,8 +354,7 @@
     });
 
     return {
-      version: 1,
-      masterVolume: Number(masterVolumeInput.value),
+      version: 2,
       oscillators: oscillators
     };
   }
@@ -167,7 +364,7 @@
       return;
     }
 
-    stateCodeInput.value = encodeState(getCurrentState());
+    stateCodeInput.value = serializeState(getCurrentState());
   }
 
   function clearAllOscillators() {
@@ -184,12 +381,14 @@
 
   function normalizeState(rawState) {
     var normalized = {
-      masterVolume: DEFAULT_MASTER_VOLUME,
+      masterVolume: Number(masterVolumeInput.value),
+      hasMasterVolume: false,
       oscillators: []
     };
 
     if (rawState && typeof rawState.masterVolume === "number") {
       normalized.masterVolume = rawState.masterVolume;
+      normalized.hasMasterVolume = true;
     }
 
     if (rawState && Array.isArray(rawState.oscillators)) {
@@ -207,9 +406,11 @@
     suppressStateRefresh = true;
     clearAllOscillators();
 
-    masterVolumeInput.value = state.masterVolume;
-    updateMasterVolumeLabel(state.masterVolume);
-    audio.setMasterVolume(state.masterVolume);
+    if (state.hasMasterVolume) {
+      masterVolumeInput.value = state.masterVolume;
+      updateMasterVolumeLabel(state.masterVolume);
+      audio.setMasterVolume(state.masterVolume);
+    }
 
     state.oscillators.forEach(function (settings) {
       createOscillatorCard(settings);
