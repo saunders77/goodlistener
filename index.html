@@ -16,6 +16,28 @@
         Start audio once, then add voices as you go.
       </p>
 
+      <section class="state-panel" aria-label="State sharing">
+        <label class="state-control" for="state-code">
+          <span>Session Code</span>
+          <textarea
+            id="state-code"
+            class="state-code"
+            rows="4"
+            spellcheck="false"
+            placeholder="Your oscillator state code will appear here."
+          ></textarea>
+        </label>
+
+        <div class="state-actions">
+          <button id="copy-state" class="secondary-button" type="button">Copy Code</button>
+          <button id="load-state" class="ghost-button" type="button">Load Code</button>
+        </div>
+
+        <p class="state-note">
+          Copy this code, open the page in a new window or tab, paste it here, and click Load Code to restore the full oscillator setup.
+        </p>
+      </section>
+
       <div class="global-panel">
         <div class="global-actions">
           <button id="start-audio" class="primary-button" type="button">Start Audio</button>

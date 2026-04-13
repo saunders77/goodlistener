@@ -7,7 +7,28 @@
   var addOscillatorButton = document.getElementById("add-oscillator");
   var masterVolumeInput = document.getElementById("master-volume");
   var masterVolumeValue = document.getElementById("master-volume-value");
+  var stateCodeInput = document.getElementById("state-code");
+  var copyStateButton = document.getElementById("copy-state");
+  var loadStateButton = document.getElementById("load-state");
   var audioStatus = document.getElementById("audio-status");
+  var suppressStateRefresh = false;
+  var DEFAULT_MASTER_VOLUME = -2.5;
+  var DEFAULT_OSCILLATOR_SETTINGS = {
+    active: false,
+    waveform: "sine",
+    volume: -12,
+    frequency: 220,
+    detune: 0,
+    vibratoDepth: 0,
+    vibratoRate: 5,
+    pan: 0,
+    filterCutoff: 12000,
+    filterQ: 0.7,
+    distortion: 0,
+    delayTime: 0.18,
+    delayMix: 0.12,
+    delayFeedback: 0.2
+  };
 
   function formatValue(control, value) {
     switch (control) {
@@ -45,6 +66,109 @@
 
   function updateMasterVolumeLabel(value) {
     masterVolumeValue.textContent = formatValue("volume", value);
+  }
+
+  function encodeState(state) {
+    return window.btoa(unescape(encodeURIComponent(JSON.stringify(state))));
+  }
+
+  function decodeState(code) {
+    return JSON.parse(decodeURIComponent(escape(window.atob(code.trim()))));
+  }
+
+  function readControlValue(input) {
+    if (input.type === "checkbox") {
+      return input.checked;
+    }
+
+    if (input.tagName === "SELECT") {
+      return input.value;
+    }
+
+    return Number(input.value);
+  }
+
+  function getCurrentState() {
+    var cards = oscillatorList.querySelectorAll(".oscillator-card");
+    var oscillators = Array.prototype.map.call(cards, function (card) {
+      var controls = card.querySelectorAll("[data-control]");
+      var settings = {};
+
+      Array.prototype.forEach.call(controls, function (input) {
+        settings[input.getAttribute("data-control")] = readControlValue(input);
+      });
+
+      return settings;
+    });
+
+    return {
+      version: 1,
+      masterVolume: Number(masterVolumeInput.value),
+      oscillators: oscillators
+    };
+  }
+
+  function refreshStateCode() {
+    if (suppressStateRefresh) {
+      return;
+    }
+
+    stateCodeInput.value = encodeState(getCurrentState());
+  }
+
+  function clearAllOscillators() {
+    var cards = Array.prototype.slice.call(oscillatorList.querySelectorAll(".oscillator-card"));
+
+    cards.forEach(function (card) {
+      if (card.dataset.voiceId) {
+        audio.removeVoice(card.dataset.voiceId);
+      }
+
+      card.remove();
+    });
+  }
+
+  function normalizeState(rawState) {
+    var normalized = {
+      masterVolume: DEFAULT_MASTER_VOLUME,
+      oscillators: []
+    };
+
+    if (rawState && typeof rawState.masterVolume === "number") {
+      normalized.masterVolume = rawState.masterVolume;
+    }
+
+    if (rawState && Array.isArray(rawState.oscillators)) {
+      normalized.oscillators = rawState.oscillators.map(function (settings) {
+        return Object.assign({}, DEFAULT_OSCILLATOR_SETTINGS, settings || {});
+      });
+    }
+
+    return normalized;
+  }
+
+  function applyState(rawState) {
+    var state = normalizeState(rawState);
+
+    suppressStateRefresh = true;
+    clearAllOscillators();
+
+    masterVolumeInput.value = state.masterVolume;
+    updateMasterVolumeLabel(state.masterVolume);
+    audio.setMasterVolume(state.masterVolume);
+
+    state.oscillators.forEach(function (settings) {
+      createOscillatorCard(settings);
+    });
+
+    suppressStateRefresh = false;
+    refreshStateCode();
+
+    if (state.oscillators.length) {
+      audioStatus.textContent = "State code loaded.";
+    } else {
+      audioStatus.textContent = "State code loaded. No oscillators were included.";
+    }
   }
 
   function getEditableDisplayValue(control, value) {
@@ -127,6 +251,7 @@
     input.value = value;
     output.textContent = formatValue(controlName, value);
     onUpdate(value);
+    refreshStateCode();
   }
 
   function enableManualValueEditing(output, input, controlName, onUpdate, statusLabel) {
@@ -220,7 +345,6 @@
     if (input.tagName === "SELECT") {
       return input.value;
     }
-
     return Number(input.value);
   }
 
@@ -267,32 +391,19 @@
       }
 
       audio.updateVoice(voiceId, controlName, value);
+      refreshStateCode();
     });
   }
 
-  function createOscillatorCard() {
-    var voice = audio.addVoice({
-      active: false,
-      waveform: "sine",
-      volume: -12,
-      frequency: 220,
-      detune: 0,
-      vibratoDepth: 0,
-      vibratoRate: 5,
-      pan: 0,
-      filterCutoff: 12000,
-      filterQ: 0.7,
-      distortion: 0,
-      delayTime: 0.18,
-      delayMix: 0.12,
-      delayFeedback: 0.2
-    });
+  function createOscillatorCard(overrides) {
+    var voice = audio.addVoice(Object.assign({}, DEFAULT_OSCILLATOR_SETTINGS, overrides || {}));
 
     var fragment = template.content.cloneNode(true);
     var card = fragment.querySelector(".oscillator-card");
     var title = fragment.querySelector(".oscillator-title");
     var removeButton = fragment.querySelector("[data-action=\"remove\"]");
 
+    card.dataset.voiceId = voice.id;
     title.textContent = "Oscillator " + voice.id.replace("osc-", "");
 
     Object.keys(voice.settings).forEach(function (controlName) {
@@ -306,10 +417,13 @@
       if (!oscillatorList.children.length) {
         audioStatus.textContent = "No oscillators yet. Add one to start building a signal chain.";
       }
+
+      refreshStateCode();
     });
 
     oscillatorList.appendChild(fragment);
     audioStatus.textContent = "Oscillator added. Toggle it on when you want to hear it.";
+    refreshStateCode();
   }
 
   startAudioButton.addEventListener("click", function () {
@@ -340,6 +454,41 @@
     var value = Number(masterVolumeInput.value);
     updateMasterVolumeLabel(value);
     audio.setMasterVolume(value);
+    refreshStateCode();
+  });
+
+  copyStateButton.addEventListener("click", function () {
+    var code = stateCodeInput.value;
+
+    if (!code) {
+      refreshStateCode();
+      code = stateCodeInput.value;
+    }
+
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(code)
+        .then(function () {
+          audioStatus.textContent = "State code copied.";
+        })
+        .catch(function () {
+          stateCodeInput.focus();
+          stateCodeInput.select();
+          audioStatus.textContent = "State code selected. Press Ctrl+C to copy.";
+        });
+      return;
+    }
+
+    stateCodeInput.focus();
+    stateCodeInput.select();
+    audioStatus.textContent = "State code selected. Press Ctrl+C to copy.";
+  });
+
+  loadStateButton.addEventListener("click", function () {
+    try {
+      applyState(decodeState(stateCodeInput.value));
+    } catch (error) {
+      audioStatus.textContent = "That state code could not be loaded.";
+    }
   });
 
   updateMasterVolumeLabel(Number(masterVolumeInput.value));
@@ -353,4 +502,5 @@
     },
     "master volume"
   );
+  refreshStateCode();
 }());
