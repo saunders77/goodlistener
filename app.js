@@ -12,6 +12,7 @@
   function formatValue(control, value) {
     switch (control) {
       case "volume":
+        return Number(value).toFixed(1) + " dBFS";
       case "delayMix":
       case "delayFeedback":
       case "distortion":
@@ -43,12 +44,13 @@
   }
 
   function updateMasterVolumeLabel(value) {
-    masterVolumeValue.textContent = Math.round(value * 100) + "%";
+    masterVolumeValue.textContent = formatValue("volume", value);
   }
 
   function getEditableDisplayValue(control, value) {
     switch (control) {
       case "volume":
+        return Number(value).toFixed(1);
       case "delayMix":
       case "delayFeedback":
         return String(Math.round(value * 100));
@@ -103,7 +105,6 @@
     }
 
     switch (control) {
-      case "volume":
       case "delayMix":
       case "delayFeedback":
         if (text.includes("%") || numericValue > 1) {
@@ -268,7 +269,7 @@
     var voice = audio.addVoice({
       active: false,
       waveform: "sine",
-      volume: 0.25,
+      volume: -12,
       frequency: 220,
       detune: 0,
       vibratoDepth: 0,

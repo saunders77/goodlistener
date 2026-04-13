@@ -3,6 +3,14 @@
     return Math.min(max, Math.max(min, value));
   }
 
+  function dbfsToGain(dbfs) {
+    return Math.pow(10, dbfs / 20);
+  }
+
+  function gainToDbfs(gain) {
+    return 20 * Math.log10(Math.max(gain, 0.0001));
+  }
+
   function createDistortionCurve(amount) {
     var samples = 256;
     var curve = new Float32Array(samples);
@@ -31,7 +39,7 @@
     this.settings = {
       active: false,
       waveform: options.waveform || "sine",
-      volume: typeof options.volume === "number" ? options.volume : 0.25,
+      volume: typeof options.volume === "number" ? options.volume : -12,
       frequency: typeof options.frequency === "number" ? options.frequency : 220,
       detune: typeof options.detune === "number" ? options.detune : 0,
       vibratoDepth: typeof options.vibratoDepth === "number" ? options.vibratoDepth : 0,
@@ -111,8 +119,8 @@
   };
 
   OscillatorVoice.prototype.setVolume = function (value) {
-    this.settings.volume = clamp(value, 0, 1);
-    safeSetAudioParam(this.volumeGain.gain, this.settings.volume, this.context);
+    this.settings.volume = clamp(value, -40, 0);
+    safeSetAudioParam(this.volumeGain.gain, dbfsToGain(this.settings.volume), this.context);
   };
 
   OscillatorVoice.prototype.setFrequency = function (value) {
@@ -264,7 +272,7 @@
 
       this.context = new ContextClass();
       this.masterGain = this.context.createGain();
-      this.masterGain.gain.value = 0.75;
+      this.masterGain.gain.value = dbfsToGain(-2.5);
       this.masterGain.connect(this.context.destination);
     }
 
@@ -278,11 +286,11 @@
 
   AudioEngine.prototype.setMasterVolume = function (value) {
     this.ensureContext();
-    safeSetAudioParam(this.masterGain.gain, clamp(value, 0, 1), this.context);
+    safeSetAudioParam(this.masterGain.gain, dbfsToGain(clamp(value, -40, 0)), this.context);
   };
 
   AudioEngine.prototype.getMasterVolume = function () {
-    return this.masterGain ? this.masterGain.gain.value : 0.75;
+    return this.masterGain ? gainToDbfs(this.masterGain.gain.value) : -2.5;
   };
 
   AudioEngine.prototype.addVoice = function (options) {
