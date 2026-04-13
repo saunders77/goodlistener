@@ -46,6 +46,166 @@
     masterVolumeValue.textContent = Math.round(value * 100) + "%";
   }
 
+  function getEditableDisplayValue(control, value) {
+    switch (control) {
+      case "volume":
+      case "delayMix":
+      case "delayFeedback":
+        return String(Math.round(value * 100));
+      case "pan":
+        return Math.abs(value) < 0.01 ? "0" : value.toFixed(2);
+      case "vibratoDepth":
+      case "vibratoRate":
+      case "filterQ":
+      case "delayTime":
+        return String(value);
+      default:
+        return String(Math.round(value * 100) / 100);
+    }
+  }
+
+  function clampToInputRange(input, value) {
+    var min = input.min === "" ? -Infinity : Number(input.min);
+    var max = input.max === "" ? Infinity : Number(input.max);
+    var step = input.step === "" || input.step === "any" ? null : Number(input.step);
+    var clamped = Math.min(max, Math.max(min, value));
+
+    if (step && Number.isFinite(step) && step > 0) {
+      var base = Number.isFinite(min) ? min : 0;
+      var steps = Math.round((clamped - base) / step);
+      var rounded = base + steps * step;
+      var precision = step.toString().includes(".")
+        ? step.toString().split(".")[1].length
+        : 0;
+
+      clamped = Number(rounded.toFixed(precision));
+    }
+
+    return clamped;
+  }
+
+  function parseManualValue(control, rawValue, input) {
+    var text = rawValue.trim().toLowerCase().replace(/,/g, "");
+    var numericValue;
+
+    if (!text) {
+      return null;
+    }
+
+    if (control === "pan" && text === "center") {
+      return 0;
+    }
+
+    numericValue = Number.parseFloat(text);
+
+    if (Number.isNaN(numericValue)) {
+      return null;
+    }
+
+    switch (control) {
+      case "volume":
+      case "delayMix":
+      case "delayFeedback":
+        if (text.includes("%") || numericValue > 1) {
+          numericValue = numericValue / 100;
+        }
+        break;
+      case "pan":
+        if (Math.abs(numericValue) > 1) {
+          numericValue = numericValue / 100;
+        }
+        break;
+      default:
+        break;
+    }
+
+    return clampToInputRange(input, numericValue);
+  }
+
+  function applyNumericControlValue(input, output, controlName, onUpdate, value) {
+    input.value = value;
+    output.textContent = formatValue(controlName, value);
+    onUpdate(value);
+  }
+
+  function enableManualValueEditing(output, input, controlName, onUpdate, statusLabel) {
+    output.classList.add("editable-value");
+    output.tabIndex = 0;
+    output.title = "Click to type a value and press Enter";
+
+    function restoreFormattedValue() {
+      output.classList.remove("is-editing");
+      output.textContent = formatValue(controlName, Number(input.value));
+    }
+
+    function startEditing() {
+      var editor;
+      var committed = false;
+
+      if (output.classList.contains("is-editing")) {
+        return;
+      }
+
+      output.classList.add("is-editing");
+      output.textContent = "";
+
+      editor = document.createElement("input");
+      editor.type = "text";
+      editor.className = "value-editor";
+      editor.value = getEditableDisplayValue(controlName, Number(input.value));
+      editor.setAttribute("aria-label", controlName + " value");
+      output.appendChild(editor);
+
+      editor.focus();
+      editor.select();
+
+      editor.addEventListener("keydown", function (event) {
+        var parsedValue;
+
+        if (event.key === "Enter") {
+          event.preventDefault();
+          parsedValue = parseManualValue(controlName, editor.value, input);
+
+          if (parsedValue === null) {
+            audioStatus.textContent = "Please type a valid number for " + statusLabel + ".";
+            restoreFormattedValue();
+            return;
+          }
+
+          committed = true;
+          applyNumericControlValue(input, output, controlName, onUpdate, parsedValue);
+          audioStatus.textContent = statusLabel + " updated.";
+          output.focus();
+          return;
+        }
+
+        if (event.key === "Escape") {
+          event.preventDefault();
+          restoreFormattedValue();
+          output.focus();
+        }
+      });
+
+      editor.addEventListener("blur", function () {
+        if (!committed) {
+          restoreFormattedValue();
+        }
+      });
+    }
+
+    output.addEventListener("click", function (event) {
+      event.preventDefault();
+      startEditing();
+    });
+
+    output.addEventListener("keydown", function (event) {
+      if (event.key === "Enter" || event.key === " ") {
+        event.preventDefault();
+        startEditing();
+      }
+    });
+  }
+
   function coerceControlValue(input) {
     if (input.type === "checkbox") {
       return input.checked;
@@ -75,6 +235,18 @@
 
     if (output) {
       output.textContent = formatValue(controlName, initialValue);
+    }
+
+    if (output && input.type === "range") {
+      enableManualValueEditing(
+        output,
+        input,
+        controlName,
+        function (value) {
+          audio.updateVoice(voiceId, controlName, value);
+        },
+        controlName
+      );
     }
 
     if (input.type === "checkbox" || input.tagName === "SELECT") {
@@ -165,4 +337,14 @@
   });
 
   updateMasterVolumeLabel(Number(masterVolumeInput.value));
+  enableManualValueEditing(
+    masterVolumeValue,
+    masterVolumeInput,
+    "volume",
+    function (value) {
+      updateMasterVolumeLabel(value);
+      audio.setMasterVolume(value);
+    },
+    "master volume"
+  );
 }());

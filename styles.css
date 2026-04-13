@@ -164,6 +164,39 @@ body::before {
   font-size: 0.95rem;
 }
 
+.editable-value {
+  display: inline-block;
+  min-width: 5.5rem;
+  padding: 0.18rem 0.4rem;
+  border-radius: 10px;
+  cursor: text;
+  user-select: text;
+  border: 1px dashed rgba(201, 94, 57, 0.4);
+  background: rgba(201, 94, 57, 0.06);
+}
+
+.editable-value:focus {
+  outline: 2px solid rgba(201, 94, 57, 0.35);
+  outline-offset: 2px;
+}
+
+.editable-value.is-editing {
+  background: rgba(255, 255, 255, 0.92);
+  border-style: solid;
+}
+
+.value-editor {
+  width: 100%;
+  min-width: 0;
+  border: none;
+  padding: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-weight: inherit;
+  outline: none;
+}
+
 .status-text {
   margin: 0;
 }
