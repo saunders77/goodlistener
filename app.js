@@ -13,6 +13,16 @@
   var audioStatus = document.getElementById("audio-status");
   var suppressStateRefresh = false;
   var DEFAULT_MASTER_VOLUME = -2.5;
+  var LOG_CONTROL_RANGES = {
+    frequency: {
+      min: 20,
+      max: 20000
+    },
+    filterCutoff: {
+      min: 80,
+      max: 12000
+    }
+  };
   var DEFAULT_OSCILLATOR_SETTINGS = {
     active: false,
     waveform: "sine",
@@ -68,6 +78,57 @@
     masterVolumeValue.textContent = formatValue("volume", value);
   }
 
+  function isLogarithmicControl(controlName) {
+    return Boolean(LOG_CONTROL_RANGES[controlName]);
+  }
+
+  function clampLogarithmicControlValue(controlName, value) {
+    var range = LOG_CONTROL_RANGES[controlName];
+
+    return Math.round(Math.min(range.max, Math.max(range.min, value)));
+  }
+
+  function logarithmicControlToSliderValue(controlName, controlValue) {
+    var range = LOG_CONTROL_RANGES[controlName];
+    var clamped = clampLogarithmicControlValue(controlName, controlValue);
+
+    return Math.log(clamped / range.min) / Math.log(range.max / range.min);
+  }
+
+  function sliderValueToLogarithmicControl(controlName, sliderValue) {
+    var range = LOG_CONTROL_RANGES[controlName];
+    var normalized = Math.min(1, Math.max(0, Number(sliderValue)));
+
+    return clampLogarithmicControlValue(
+      controlName,
+      range.min * Math.pow(range.max / range.min, normalized)
+    );
+  }
+
+  function controlValueToInputValue(controlName, value) {
+    if (isLogarithmicControl(controlName)) {
+      return logarithmicControlToSliderValue(controlName, value);
+    }
+
+    return value;
+  }
+
+  function inputValueToControlValue(controlName, input) {
+    if (input.type === "checkbox") {
+      return input.checked;
+    }
+
+    if (input.tagName === "SELECT") {
+      return input.value;
+    }
+
+    if (isLogarithmicControl(controlName)) {
+      return sliderValueToLogarithmicControl(controlName, input.value);
+    }
+
+    return Number(input.value);
+  }
+
   function encodeState(state) {
     return window.btoa(unescape(encodeURIComponent(JSON.stringify(state))));
   }
@@ -77,15 +138,7 @@
   }
 
   function readControlValue(input) {
-    if (input.type === "checkbox") {
-      return input.checked;
-    }
-
-    if (input.tagName === "SELECT") {
-      return input.value;
-    }
-
-    return Number(input.value);
+    return inputValueToControlValue(input.getAttribute("data-control"), input);
   }
 
   function getCurrentState() {
@@ -175,6 +228,8 @@
     switch (control) {
       case "volume":
         return Number(value).toFixed(1);
+      case "frequency":
+        return String(Math.round(value));
       case "delayMix":
       case "delayFeedback":
         return String(Math.round(value * 100));
@@ -229,6 +284,9 @@
     }
 
     switch (control) {
+      case "frequency":
+      case "filterCutoff":
+        return clampLogarithmicControlValue(control, numericValue);
       case "delayMix":
       case "delayFeedback":
         if (text.includes("%") || numericValue > 1) {
@@ -248,7 +306,7 @@
   }
 
   function applyNumericControlValue(input, output, controlName, onUpdate, value) {
-    input.value = value;
+    input.value = controlValueToInputValue(controlName, value);
     output.textContent = formatValue(controlName, value);
     onUpdate(value);
     refreshStateCode();
@@ -265,7 +323,7 @@
     }
 
     function restoreFormattedValue() {
-      finishEditing(formatValue(controlName, Number(input.value)));
+      finishEditing(formatValue(controlName, inputValueToControlValue(controlName, input)));
     }
 
     function startEditing() {
@@ -282,7 +340,10 @@
       editor = document.createElement("input");
       editor.type = "text";
       editor.className = "value-editor";
-      editor.value = getEditableDisplayValue(controlName, Number(input.value));
+      editor.value = getEditableDisplayValue(
+        controlName,
+        inputValueToControlValue(controlName, input)
+      );
       editor.setAttribute("aria-label", controlName + " value");
       output.appendChild(editor);
 
@@ -338,14 +399,7 @@
   }
 
   function coerceControlValue(input) {
-    if (input.type === "checkbox") {
-      return input.checked;
-    }
-
-    if (input.tagName === "SELECT") {
-      return input.value;
-    }
-    return Number(input.value);
+    return inputValueToControlValue(input.getAttribute("data-control"), input);
   }
 
   function bindControl(card, voiceId, controlName, initialValue) {
@@ -360,7 +414,7 @@
     if (input.type === "checkbox") {
       input.checked = Boolean(initialValue);
     } else {
-      input.value = initialValue;
+      input.value = controlValueToInputValue(controlName, initialValue);
     }
 
     if (output) {
