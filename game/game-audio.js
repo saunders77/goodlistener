@@ -18,6 +18,9 @@
   };
   const MAX_OUTPUT_DB = -2;
   const SPATIAL_SMOOTHING_SECONDS = 0.075;
+  const DOPPLER_SMOOTHING_SECONDS = 0.06;
+  const REAL_SPEED_OF_SOUND_FT_PER_SECOND = 343 * 3.280839895013123;
+  const SIMULATED_SPEED_OF_SOUND_FT_PER_SECOND = REAL_SPEED_OF_SOUND_FT_PER_SECOND / 10;
   const ALIAS_TO_CONTROL = {
     a: "active",
     w: "waveform",
@@ -195,6 +198,7 @@
 
     this.source.start();
     this.lfo.start();
+    this.pitchShiftCents = 0;
 
     this.applyAllSettings();
   }
@@ -204,7 +208,6 @@
     this.filterNode.type = "lowpass";
 
     rampAudioParam(this.source.frequency, clamp(this.settings.frequency, 20, 20000), this.context);
-    rampAudioParam(this.source.detune, clamp(this.settings.detune, -2400, 2400), this.context);
     rampAudioParam(this.lfoGain.gain, clamp(this.settings.vibratoDepth, 0, 200), this.context);
     rampAudioParam(this.lfo.frequency, clamp(this.settings.vibratoRate, 0.01, 40), this.context);
     rampAudioParam(this.panNode.pan, clamp(this.settings.pan, -1, 1), this.context);
@@ -221,6 +224,26 @@
       ? null
       : createDistortionCurve(clamp(this.settings.distortion, 0, 100));
     this.shaperNode.oversample = this.settings.distortion === 0 ? "none" : "4x";
+    this.updatePitchShiftCents(this.pitchShiftCents, true);
+  };
+
+  MosquitoVoice.prototype.updatePitchShiftCents = function (pitchShiftCents, immediate) {
+    const totalDetune = clamp(this.settings.detune + pitchShiftCents, -2400, 2400);
+
+    this.pitchShiftCents = pitchShiftCents;
+
+    if (immediate) {
+      this.source.detune.cancelScheduledValues(this.context.currentTime);
+      this.source.detune.setValueAtTime(totalDetune, this.context.currentTime);
+      return;
+    }
+
+    smoothAudioParam(
+      this.source.detune,
+      totalDetune,
+      this.context,
+      DOPPLER_SMOOTHING_SECONDS
+    );
   };
 
   MosquitoVoice.prototype.dispose = function () {
@@ -261,6 +284,7 @@
     this.voices = [];
     this.pendingGain = 0;
     this.pendingPan = 0;
+    this.pendingPitchFactor = 1;
     this.startPromise = null;
     this.outputTrimDb = MAX_OUTPUT_DB;
   }
@@ -318,12 +342,20 @@
     return this.startPromise;
   };
 
-  MosquitoAudio.prototype.updateSpatial = function (distanceFeet, pan) {
+  MosquitoAudio.prototype.updateSpatial = function (distanceFeet, pan, distanceRateFeetPerSecond) {
     const clampedDistance = Math.max(distanceFeet, 0.0001);
     const nextGain = clampedDistance <= 1 ? 1 : 1 / clampedDistance;
+    const dopplerFactor = clamp(
+      (SIMULATED_SPEED_OF_SOUND_FT_PER_SECOND - distanceRateFeetPerSecond) /
+        SIMULATED_SPEED_OF_SOUND_FT_PER_SECOND,
+      0.25,
+      4
+    );
+    const pitchShiftCents = 1200 * Math.log2(dopplerFactor);
 
     this.pendingGain = clamp(nextGain, 0, 1);
     this.pendingPan = clamp(pan, -1, 1);
+    this.pendingPitchFactor = dopplerFactor;
 
     if (!this.context) {
       return;
@@ -341,6 +373,10 @@
       this.context,
       SPATIAL_SMOOTHING_SECONDS
     );
+
+    for (const voice of this.voices) {
+      voice.updatePitchShiftCents(pitchShiftCents, false);
+    }
   };
 
   MosquitoAudio.prototype.dispose = function () {
@@ -368,6 +404,7 @@
   };
 
   window.GoodListenerGameAudio = {
-    MosquitoAudio
+    MosquitoAudio,
+    SIMULATED_SPEED_OF_SOUND_FT_PER_SECOND
   };
 })();

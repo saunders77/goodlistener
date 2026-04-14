@@ -135,9 +135,9 @@
     mapCtx.imageSmoothingEnabled = true;
     firstPersonCtx.imageSmoothingEnabled = true;
 
-    updateMosquitoAudio();
+    updateMosquitoAudio(0);
     setAudioStatus(
-      `Ready. Press a movement key or click to start mosquito audio. Oscillators normalized by ${formatSignedNumber(mosquitoAudio.normalizationDb)} dB, then trimmed ${mosquitoAudio.outputTrimDb.toFixed(1)} dB at the output.`
+      `Ready. Press a movement key or click to start mosquito audio. Oscillators normalized by ${formatSignedNumber(mosquitoAudio.normalizationDb)} dB, trimmed ${mosquitoAudio.outputTrimDb.toFixed(1)} dB, and doppler-shifted with a sound speed of ${window.GoodListenerGameAudio.SIMULATED_SPEED_OF_SOUND_FT_PER_SECOND.toFixed(2)} ft/s.`
     );
 
     window.addEventListener("pointerdown", enableMosquitoAudio);
@@ -207,7 +207,7 @@
         state.bat.y = clamp(nextY, BOUNDARY.south + PLAYER_RADIUS, BOUNDARY.north - PLAYER_RADIUS);
       }
 
-      updateMosquitoAudio();
+      updateMosquitoAudio(moveDirection);
     }
 
     function render() {
@@ -341,7 +341,7 @@
           }
 
           audioRunning = true;
-          setAudioStatus("Audio on. Mosquito gain and pan are smoothed while the bat moves and turns.");
+          setAudioStatus("Audio on. Mosquito gain, pan, and doppler pitch are smoothed while the bat moves and turns.");
         })
         .catch((error) => {
           console.error(error);
@@ -349,9 +349,10 @@
         });
     }
 
-    function updateMosquitoAudio() {
+    function updateMosquitoAudio(moveDirection) {
       const dx = state.mosquito.x - state.bat.x;
       const dy = state.mosquito.y - state.bat.y;
+      const distanceUnits = Math.hypot(dx, dy);
       const distanceFeet = Math.hypot(dx, dy) / WORLD_UNITS_PER_FOOT;
       const forwardX = Math.sin(state.bat.angle);
       const forwardY = Math.cos(state.bat.angle);
@@ -361,8 +362,14 @@
       const forwardOffset = dx * forwardX + dy * forwardY;
       const planarDistance = Math.hypot(lateralOffset, forwardOffset);
       const pan = planarDistance < 0.0001 ? 0 : 0.9 * (lateralOffset / planarDistance);
+      const velocityX = Math.sin(state.bat.angle) * MOVE_SPEED * moveDirection;
+      const velocityY = Math.cos(state.bat.angle) * MOVE_SPEED * moveDirection;
+      const distanceRateUnitsPerSecond = distanceUnits < 0.0001
+        ? 0
+        : -((dx * velocityX) + (dy * velocityY)) / distanceUnits;
+      const distanceRateFeetPerSecond = distanceRateUnitsPerSecond / WORLD_UNITS_PER_FOOT;
 
-      mosquitoAudio.updateSpatial(distanceFeet, pan);
+      mosquitoAudio.updateSpatial(distanceFeet, pan, distanceRateFeetPerSecond);
     }
   }
 
@@ -585,7 +592,7 @@
 
   function drawFirstPersonHud(ctx) {
     ctx.fillStyle = "rgba(6, 11, 20, 0.62)";
-    ctx.fillRect(18, 18, 484, 92);
+    ctx.fillRect(18, 18, 612, 112);
 
     ctx.fillStyle = "#eef6ff";
     ctx.font = '700 16px "Trebuchet MS", "Lucida Sans Unicode", sans-serif';
@@ -595,6 +602,7 @@
     ctx.font = '14px "Trebuchet MS", "Lucida Sans Unicode", sans-serif';
     ctx.fillText("Tree height = 2x flight height. 120 Hz fixed simulation step.", 32, 68);
     ctx.fillText("Mosquito mix pans smoothly: +/-90 degrees maps to +/-90% pan.", 32, 88);
+    ctx.fillText("Pitch uses doppler shift from radial motion with sound speed reduced to 1/10 real.", 32, 108);
   }
 
   function drawStatus(ctx, title, detail) {
