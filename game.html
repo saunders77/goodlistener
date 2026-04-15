@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>goodlistener | Bat and Mosquito</title>
+  <title>GoodListener</title>
   <style>
     :root {
       --bg: #050912;
@@ -97,6 +97,59 @@
       color: #f6edb7;
     }
 
+    .game-overlay {
+      position: absolute;
+      inset: 0;
+      z-index: 10;
+      display: grid;
+      place-items: center;
+      padding: 1rem;
+      background: rgba(4, 6, 11, 0.68);
+      backdrop-filter: blur(4px);
+    }
+
+    .game-overlay[hidden] {
+      display: none;
+    }
+
+    .game-dialog {
+      width: min(360px, 100%);
+      padding: 1.35rem;
+      border: 1px solid rgba(244, 222, 89, 0.28);
+      border-radius: 8px;
+      background: rgba(9, 16, 28, 0.95);
+      box-shadow: 0 18px 54px rgba(0, 0, 0, 0.42);
+      text-align: center;
+    }
+
+    .game-dialog h2 {
+      margin: 0 0 1rem;
+      color: var(--ink);
+      font-size: clamp(1.6rem, 5vw, 2.4rem);
+      line-height: 1.05;
+    }
+
+    .game-dialog button {
+      min-width: 9rem;
+      border: 0;
+      border-radius: 8px;
+      padding: 0.7rem 1rem;
+      background: linear-gradient(180deg, var(--accent), var(--accent-deep));
+      color: #101013;
+      cursor: pointer;
+      font: 700 1rem/1 "Trebuchet MS", "Lucida Sans Unicode", sans-serif;
+    }
+
+    .game-dialog button:focus-visible {
+      outline: 3px solid rgba(238, 246, 255, 0.78);
+      outline-offset: 3px;
+    }
+
+    .game-dialog button:disabled {
+      cursor: wait;
+      opacity: 0.62;
+    }
+
     .views {
       display: grid;
       gap: 1rem;
@@ -110,6 +163,11 @@
         rgba(8, 13, 23, 0.94);
       box-shadow: 0 18px 48px rgba(0, 0, 0, 0.24);
       overflow: hidden;
+    }
+
+    .world-view {
+      position: relative;
+      background: #05080f;
     }
 
     .panel-header {
@@ -166,48 +224,57 @@
 <body>
   <main class="page">
     <section class="hero">
-      <p class="eyebrow">goodlistener</p>
-      <h1>Bat vs. Mosquito Dual View</h1>
-      <p>
-        Both canvases render the same flying world in sync: a north-up bird's-eye map and a
-        horizontal first-person camera with a 65-degree horizontal field of view.
-      </p>
+      <h1>Good Listener</h1>
+      <p>Use the keyboard to move, then listen for the mosquito. Its pitch changes with the doppler effect from relative motion. For a challenge, play with your eyes closed.</p>
       <div class="meta">
         <span>W / Up: forward</span>
         <span>S / Down: backward</span>
         <span>A / Left and D / Right: turn</span>
-        <span>120 Hz simulation step</span>
       </div>
       <p id="audio-status" class="audio-note">
-        <strong>Audio:</strong> press a movement key or click anywhere to start the mosquito sound.
+        Click start to begin the chase.
       </p>
     </section>
 
     <section class="views">
       <article class="panel">
         <div class="panel-header">
-          <h2>Bird's-Eye View</h2>
-          <p>North stays at the top. The mosquito keeps its 10-pixel map width and the boundary is lined with trees.</p>
+          <h2>Catch the mosquito by sound</h2>
         </div>
-        <canvas
-          id="map-view"
-          width="1280"
-          height="720"
-          aria-label="Top-down view of the bat, mosquito, and tree boundary"
-        ></canvas>
-      </article>
+        <div class="world-view">
+          <canvas
+            id="first-person-view"
+            width="1280"
+            height="720"
+            aria-label="Catch the mosquito by sound"
+          ></canvas>
 
-      <article class="panel">
-        <div class="panel-header">
-          <h2>First-Person View</h2>
-          <p>The mosquito still projects to 10 pixels wide at the starting distance and the world edge is a ring of trees.</p>
+          <div
+            id="start-overlay"
+            class="game-overlay"
+            role="dialog"
+            aria-modal="true"
+            aria-label="Start game"
+          >
+            <div class="game-dialog">
+              <button id="start-button" type="button" disabled>start</button>
+            </div>
+          </div>
+
+          <div
+            id="caught-overlay"
+            class="game-overlay"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="caught-title"
+            hidden
+          >
+            <div class="game-dialog">
+              <h2 id="caught-title">caught the mosquito!</h2>
+              <button id="try-again" type="button">try again</button>
+            </div>
+          </div>
         </div>
-        <canvas
-          id="first-person-view"
-          width="1280"
-          height="720"
-          aria-label="First-person view from the bat with the mosquito and tree boundary"
-        ></canvas>
       </article>
     </section>
   </main>

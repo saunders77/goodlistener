@@ -1,13 +1,15 @@
 (() => {
   const COMPACT_STATE_PREFIX = "g2:";
+  const DEFAULT_VIBRATO_DEPTH_CENTS = 16;
+  const DEFAULT_VIBRATO_RATE_HZ = 2;
   const DEFAULT_OSCILLATOR_SETTINGS = {
     active: false,
     waveform: "sine",
     volume: -12,
     frequency: 220,
     detune: 0,
-    vibratoDepth: 0,
-    vibratoRate: 5,
+    vibratoDepth: DEFAULT_VIBRATO_DEPTH_CENTS,
+    vibratoRate: DEFAULT_VIBRATO_RATE_HZ,
     pan: 0,
     filterCutoff: 12000,
     filterQ: 0.7,
@@ -17,6 +19,7 @@
     delayFeedback: 0.2
   };
   const MAX_OUTPUT_DB = -2;
+  const STARTUP_FADE_SECONDS = 0.12;
   const SPATIAL_SMOOTHING_SECONDS = 0.075;
   const DOPPLER_SMOOTHING_SECONDS = 0.06;
   const REAL_SPEED_OF_SOUND_FT_PER_SECOND = 343 * 3.280839895013123;
@@ -57,6 +60,17 @@
     param.cancelScheduledValues(now);
     param.setValueAtTime(param.value, now);
     param.linearRampToValueAtTime(value, now + 0.03);
+  }
+
+  function setOrRampAudioParam(param, value, context, immediate) {
+    if (!immediate) {
+      rampAudioParam(param, value, context);
+      return;
+    }
+
+    const now = context.currentTime;
+    param.cancelScheduledValues(now);
+    param.setValueAtTime(value, now);
   }
 
   function smoothAudioParam(param, value, context, timeConstant) {
@@ -176,6 +190,9 @@
     this.activeGain = context.createGain();
     this.lfo = context.createOscillator();
     this.lfoGain = context.createGain();
+    this.pitchShiftCents = 0;
+
+    this.applyAllSettings(true);
 
     this.source.connect(this.filterNode);
     this.filterNode.connect(this.shaperNode);
@@ -194,31 +211,28 @@
     this.activeGain.connect(destination);
 
     this.lfo.connect(this.lfoGain);
-    this.lfoGain.connect(this.source.frequency);
+    this.lfoGain.connect(this.source.detune);
 
     this.source.start();
     this.lfo.start();
-    this.pitchShiftCents = 0;
-
-    this.applyAllSettings();
   }
 
-  MosquitoVoice.prototype.applyAllSettings = function () {
+  MosquitoVoice.prototype.applyAllSettings = function (immediate) {
     this.source.type = this.settings.waveform;
     this.filterNode.type = "lowpass";
 
-    rampAudioParam(this.source.frequency, clamp(this.settings.frequency, 20, 20000), this.context);
-    rampAudioParam(this.lfoGain.gain, clamp(this.settings.vibratoDepth, 0, 200), this.context);
-    rampAudioParam(this.lfo.frequency, clamp(this.settings.vibratoRate, 0.01, 40), this.context);
-    rampAudioParam(this.panNode.pan, clamp(this.settings.pan, -1, 1), this.context);
-    rampAudioParam(this.volumeGain.gain, dbfsToGain(clamp(this.settings.volume, -40, 0)), this.context);
-    rampAudioParam(this.filterNode.frequency, clamp(this.settings.filterCutoff, 40, 20000), this.context);
-    rampAudioParam(this.filterNode.Q, clamp(this.settings.filterQ, 0.1, 30), this.context);
-    rampAudioParam(this.delayNode.delayTime, clamp(this.settings.delayTime, 0, 1), this.context);
-    rampAudioParam(this.delayWetGain.gain, clamp(this.settings.delayMix, 0, 1), this.context);
-    rampAudioParam(this.dryGain.gain, 1 - clamp(this.settings.delayMix, 0, 1), this.context);
-    rampAudioParam(this.feedbackGain.gain, clamp(this.settings.delayFeedback, 0, 0.95), this.context);
-    rampAudioParam(this.activeGain.gain, this.settings.active ? 1 : 0, this.context);
+    setOrRampAudioParam(this.source.frequency, clamp(this.settings.frequency, 20, 20000), this.context, immediate);
+    setOrRampAudioParam(this.lfoGain.gain, clamp(this.settings.vibratoDepth, 0, 1200), this.context, immediate);
+    setOrRampAudioParam(this.lfo.frequency, clamp(this.settings.vibratoRate, 0.01, 120), this.context, immediate);
+    setOrRampAudioParam(this.panNode.pan, clamp(this.settings.pan, -1, 1), this.context, immediate);
+    setOrRampAudioParam(this.volumeGain.gain, dbfsToGain(clamp(this.settings.volume, -40, 0)), this.context, immediate);
+    setOrRampAudioParam(this.filterNode.frequency, clamp(this.settings.filterCutoff, 40, 20000), this.context, immediate);
+    setOrRampAudioParam(this.filterNode.Q, clamp(this.settings.filterQ, 0.1, 30), this.context, immediate);
+    setOrRampAudioParam(this.delayNode.delayTime, clamp(this.settings.delayTime, 0, 1), this.context, immediate);
+    setOrRampAudioParam(this.delayWetGain.gain, clamp(this.settings.delayMix, 0, 1), this.context, immediate);
+    setOrRampAudioParam(this.dryGain.gain, 1 - clamp(this.settings.delayMix, 0, 1), this.context, immediate);
+    setOrRampAudioParam(this.feedbackGain.gain, clamp(this.settings.delayFeedback, 0, 0.95), this.context, immediate);
+    setOrRampAudioParam(this.activeGain.gain, this.settings.active ? 1 : 0, this.context, immediate);
 
     this.shaperNode.curve = this.settings.distortion === 0
       ? null
@@ -279,6 +293,7 @@
     this.context = null;
     this.voiceBus = null;
     this.outputTrimGain = null;
+    this.startupGain = null;
     this.distanceGain = null;
     this.scenePan = null;
     this.voices = [];
@@ -303,15 +318,18 @@
     this.context = new ContextClass();
     this.voiceBus = this.context.createGain();
     this.outputTrimGain = this.context.createGain();
+    this.startupGain = this.context.createGain();
     this.distanceGain = this.context.createGain();
     this.scenePan = this.context.createStereoPanner();
 
     this.voiceBus.connect(this.outputTrimGain);
-    this.outputTrimGain.connect(this.distanceGain);
+    this.outputTrimGain.connect(this.startupGain);
+    this.startupGain.connect(this.distanceGain);
     this.distanceGain.connect(this.scenePan);
     this.scenePan.connect(this.context.destination);
 
     this.outputTrimGain.gain.value = dbfsToGain(this.outputTrimDb);
+    this.startupGain.gain.value = 0;
     this.distanceGain.gain.value = this.pendingGain;
     this.scenePan.pan.value = this.pendingPan;
 
@@ -334,6 +352,12 @@
     }
 
     this.startPromise = this.context.resume()
+      .then(() => {
+        const now = this.context.currentTime;
+        this.startupGain.gain.cancelScheduledValues(now);
+        this.startupGain.gain.setValueAtTime(this.startupGain.gain.value, now);
+        this.startupGain.gain.linearRampToValueAtTime(1, now + STARTUP_FADE_SECONDS);
+      })
       .catch((error) => {
         this.startPromise = null;
         throw error;
@@ -392,6 +416,10 @@
 
     if (this.distanceGain) {
       this.distanceGain.disconnect();
+    }
+
+    if (this.startupGain) {
+      this.startupGain.disconnect();
     }
 
     if (this.outputTrimGain) {

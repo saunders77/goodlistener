@@ -16,6 +16,16 @@
   const FIXED_STEP = 1 / 120;
   const MOVE_SPEED = WORLD_DEPTH * 0.08;
   const TURN_SPEED = Math.PI;
+  const MOSQUITO_SPEED = MOVE_SPEED * 0.5;
+  const MOSQUITO_INITIAL_ANGLE = Math.PI / 2;
+  const MOSQUITO_TURN_RATE_CHANGE_SECONDS = 1;
+  const MOSQUITO_MAX_TURN_RATE = Math.PI / 2;
+  const MOSQUITO_TURN_RADIUS = MOSQUITO_SPEED / MOSQUITO_MAX_TURN_RATE;
+  const MOSQUITO_PERIMETER_TURN_BUFFER = MOSQUITO_TURN_RADIUS * 4 + MOSQUITO_SPEED * FIXED_STEP;
+  const MOSQUITO_PERIMETER_TEST_SECONDS = 2.25;
+  const MOSQUITO_PERIMETER_TEST_STEP = 1 / 30;
+  const CATCH_DISTANCE_FEET = 0.5;
+  const CATCH_DISTANCE_UNITS = CATCH_DISTANCE_FEET * WORLD_UNITS_PER_FOOT;
 
   const TREE_HEIGHT = 120;
   const ENTITY_HEIGHT = TREE_HEIGHT / 2;
@@ -24,8 +34,6 @@
   const PLAYER_RADIUS = 10;
 
   const MAP_MOSQUITO_WIDTH = 10;
-  const MAP_TREE_HEIGHT = 34;
-  const MAP_TREE_Y_OFFSET = 3;
   const START_DISTANCE = WORLD_DEPTH * 0.6;
 
   const BOUNDARY = {
@@ -50,32 +58,14 @@
     ArrowRight: "right"
   };
 
-  const mapCanvas = document.getElementById("map-view");
   const firstPersonCanvas = document.getElementById("first-person-view");
   const audioStatus = document.getElementById("audio-status");
-  const mapCtx = mapCanvas.getContext("2d");
+  const startOverlay = document.getElementById("start-overlay");
+  const startButton = document.getElementById("start-button");
+  const caughtOverlay = document.getElementById("caught-overlay");
+  const tryAgainButton = document.getElementById("try-again");
   const firstPersonCtx = firstPersonCanvas.getContext("2d");
 
-  const batMapSprite = createPixelSprite(
-    [
-      "0002200000",
-      "0022220000",
-      "2222222220",
-      "2221122222",
-      "0222222220",
-      "0022222000",
-      "0010010000",
-      "0110011000",
-      "1100001100",
-      "0000000000"
-    ],
-    {
-      1: "#f4de59",
-      2: "#151923"
-    }
-  );
-
-  drawStatus(mapCtx, "Loading assets", "Preparing mosquito, tree, and sound assets...");
   drawStatus(firstPersonCtx, "Loading assets", "Preparing mosquito, tree, and sound assets...");
 
   Promise.all([
@@ -87,7 +77,6 @@
     })
     .catch((error) => {
       console.error(error);
-      drawStatus(mapCtx, "Asset load failed", "Check /game assets and mosquito.txt.");
       drawStatus(firstPersonCtx, "Asset load failed", "Check the browser console for details.");
       setAudioStatus("Audio unavailable because the game assets did not finish loading.");
     });
@@ -102,9 +91,6 @@
     const treeWorldHeight = TREE_HEIGHT;
     const treeWorldWidth = treeWorldHeight / treeAspect;
 
-    const mapMosquitoHeight = MAP_MOSQUITO_WIDTH * mosquitoAspect;
-    const mapTreeWidth = MAP_TREE_HEIGHT / treeAspect;
-
     const boundaryTrees = buildBoundaryTrees(treeWorldWidth, treeWorldHeight);
     const input = {
       forward: false,
@@ -114,33 +100,25 @@
     };
 
     const state = {
-      bat: {
-        x: WORLD_WIDTH * 0.5,
-        y: WORLD_DEPTH * 0.2,
-        angle: 0,
-        z: ENTITY_HEIGHT
-      },
-      mosquito: {
-        x: WORLD_WIDTH * 0.5,
-        y: WORLD_DEPTH * 0.8,
-        z: ENTITY_HEIGHT,
-        width: mosquitoWorldWidth,
-        height: mosquitoWorldHeight
-      }
+      isCaught: false,
+      bat: createInitialBatState(),
+      mosquito: createInitialMosquitoState()
     };
     const mosquitoSoundCode = getMosquitoSoundCode();
     const mosquitoAudio = new window.GoodListenerGameAudio.MosquitoAudio(mosquitoSoundCode);
     let audioRunning = false;
+    let isStarted = false;
 
-    mapCtx.imageSmoothingEnabled = true;
     firstPersonCtx.imageSmoothingEnabled = true;
 
-    updateMosquitoAudio(0);
-    setAudioStatus(
-      `Ready. Press a movement key or click to start mosquito audio. Oscillators normalized by ${formatSignedNumber(mosquitoAudio.normalizationDb)} dB, trimmed ${mosquitoAudio.outputTrimDb.toFixed(1)} dB, and doppler-shifted with a sound speed of ${window.GoodListenerGameAudio.SIMULATED_SPEED_OF_SOUND_FT_PER_SECOND.toFixed(2)} ft/s.`
-    );
+    updateMosquitoAudio();
+    setAudioStatus("press start to begin the mosquito sound.");
 
-    window.addEventListener("pointerdown", enableMosquitoAudio);
+    if (startButton) {
+      startButton.disabled = false;
+      startButton.addEventListener("click", startRound);
+      startButton.focus();
+    }
 
     window.addEventListener(
       "keydown",
@@ -150,7 +128,10 @@
           return;
         }
 
-        enableMosquitoAudio();
+        if (!isStarted) {
+          return;
+        }
+
         input[action] = true;
         event.preventDefault();
       },
@@ -173,6 +154,10 @@
       input.right = false;
     });
 
+    if (tryAgainButton) {
+      tryAgainButton.addEventListener("click", resetGame);
+    }
+
     let previousTime = performance.now();
     let accumulator = 0;
 
@@ -181,6 +166,13 @@
     function frame(now) {
       const elapsed = Math.min((now - previousTime) / 1000, 0.25);
       previousTime = now;
+
+      if (!isStarted) {
+        render();
+        requestAnimationFrame(frame);
+        return;
+      }
+
       accumulator += elapsed;
 
       while (accumulator >= FIXED_STEP) {
@@ -193,8 +185,15 @@
     }
 
     function update(dt) {
+      if (state.isCaught) {
+        updateMosquitoAudio();
+        return;
+      }
+
       const turnDirection = (input.right ? 1 : 0) - (input.left ? 1 : 0);
       const moveDirection = (input.forward ? 1 : 0) - (input.backward ? 1 : 0);
+      const previousBatX = state.bat.x;
+      const previousBatY = state.bat.y;
 
       state.bat.angle = wrapAngle(state.bat.angle + turnDirection * TURN_SPEED * dt);
 
@@ -207,40 +206,20 @@
         state.bat.y = clamp(nextY, BOUNDARY.south + PLAYER_RADIUS, BOUNDARY.north - PLAYER_RADIUS);
       }
 
-      updateMosquitoAudio(moveDirection);
+      state.bat.velocityX = (state.bat.x - previousBatX) / dt;
+      state.bat.velocityY = (state.bat.y - previousBatY) / dt;
+
+      updateMosquito(dt);
+
+      if (getBatMosquitoDistanceUnits() <= CATCH_DISTANCE_UNITS) {
+        endGame();
+      }
+
+      updateMosquitoAudio();
     }
 
     function render() {
-      drawMapView();
       drawFirstPersonView();
-    }
-
-    function drawMapView() {
-      const bg = mapCtx.createLinearGradient(0, 0, 0, SCREEN_HEIGHT);
-      bg.addColorStop(0, "#0a1824");
-      bg.addColorStop(1, "#08100d");
-      mapCtx.fillStyle = bg;
-      mapCtx.fillRect(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT);
-
-      mapCtx.fillStyle = "rgba(109, 145, 102, 0.08)";
-      mapCtx.fillRect(0, SCREEN_HEIGHT * 0.26, SCREEN_WIDTH, SCREEN_HEIGHT * 0.44);
-
-      drawFovCone(mapCtx, state.bat);
-      drawBoundaryTreesOnMap(mapCtx, treeImage, boundaryTrees, mapTreeWidth, MAP_TREE_HEIGHT);
-      drawCompass(mapCtx);
-      drawMapHud(mapCtx);
-
-      drawImageSpriteOnMap(
-        mapCtx,
-        mosquitoImage,
-        state.mosquito.x,
-        state.mosquito.y,
-        0,
-        MAP_MOSQUITO_WIDTH,
-        mapMosquitoHeight
-      );
-
-      drawPixelSpriteOnMap(mapCtx, batMapSprite, state.bat.x, state.bat.y, state.bat.angle);
     }
 
     function drawFirstPersonView() {
@@ -341,7 +320,7 @@
           }
 
           audioRunning = true;
-          setAudioStatus("Audio on. Mosquito gain, pan, and doppler pitch are smoothed while the bat moves and turns.");
+          setAudioStatus("mosquito pitch includes the doppler shift from relative motion.");
         })
         .catch((error) => {
           console.error(error);
@@ -349,7 +328,205 @@
         });
     }
 
-    function updateMosquitoAudio(moveDirection) {
+    function startRound() {
+      isStarted = true;
+      previousTime = performance.now();
+      accumulator = 0;
+
+      if (startOverlay) {
+        startOverlay.hidden = true;
+      }
+
+      enableMosquitoAudio();
+      setAudioStatus("mosquito pitch includes the doppler shift from relative motion.");
+    }
+
+    function createInitialBatState() {
+      return {
+        x: WORLD_WIDTH * 0.5,
+        y: WORLD_DEPTH * 0.2,
+        angle: 0,
+        z: ENTITY_HEIGHT,
+        velocityX: 0,
+        velocityY: 0
+      };
+    }
+
+    function createInitialMosquitoState() {
+      return {
+        x: WORLD_WIDTH * 0.5,
+        y: WORLD_DEPTH * 0.8,
+        z: ENTITY_HEIGHT,
+        width: mosquitoWorldWidth,
+        height: mosquitoWorldHeight,
+        angle: MOSQUITO_INITIAL_ANGLE,
+        randomTurnRate: 0,
+        turnRate: 0,
+        turnRateChangeTimer: MOSQUITO_TURN_RATE_CHANGE_SECONDS,
+        velocityX: MOSQUITO_SPEED,
+        velocityY: 0
+      };
+    }
+
+    function updateMosquito(dt) {
+      updateMosquitoRandomTurnRate(dt);
+      state.mosquito.turnRate = getMosquitoTurnRate(state.mosquito);
+      state.mosquito.angle = wrapAngle(state.mosquito.angle + state.mosquito.turnRate * dt);
+      state.mosquito.velocityX = Math.sin(state.mosquito.angle) * MOSQUITO_SPEED;
+      state.mosquito.velocityY = Math.cos(state.mosquito.angle) * MOSQUITO_SPEED;
+      state.mosquito.x += state.mosquito.velocityX * dt;
+      state.mosquito.y += state.mosquito.velocityY * dt;
+    }
+
+    function updateMosquitoRandomTurnRate(dt) {
+      state.mosquito.turnRateChangeTimer -= dt;
+
+      while (state.mosquito.turnRateChangeTimer <= 0) {
+        state.mosquito.randomTurnRate = randomInRange(-MOSQUITO_MAX_TURN_RATE, MOSQUITO_MAX_TURN_RATE);
+        state.mosquito.turnRateChangeTimer += MOSQUITO_TURN_RATE_CHANGE_SECONDS;
+      }
+    }
+
+    function getMosquitoTurnRate(mosquito) {
+      const avoidanceVector = getMosquitoPerimeterAvoidanceVector(mosquito);
+
+      if (!avoidanceVector) {
+        return mosquito.randomTurnRate;
+      }
+
+      return getSaferMosquitoTurnSign(mosquito) * MOSQUITO_MAX_TURN_RATE;
+    }
+
+    function getMosquitoPerimeterAvoidanceVector(mosquito) {
+      const directionX = Math.sin(mosquito.angle);
+      const directionY = Math.cos(mosquito.angle);
+      const projectedX = mosquito.x + directionX * MOSQUITO_PERIMETER_TURN_BUFFER;
+      const projectedY = mosquito.y + directionY * MOSQUITO_PERIMETER_TURN_BUFFER;
+      let avoidX = 0;
+      let avoidY = 0;
+
+      if (projectedX > BOUNDARY.east) {
+        avoidX -= projectedX - BOUNDARY.east;
+      } else if (projectedX < BOUNDARY.west) {
+        avoidX += BOUNDARY.west - projectedX;
+      }
+
+      if (projectedY > BOUNDARY.north) {
+        avoidY -= projectedY - BOUNDARY.north;
+      } else if (projectedY < BOUNDARY.south) {
+        avoidY += BOUNDARY.south - projectedY;
+      }
+
+      if (avoidX === 0 && avoidY === 0) {
+        return null;
+      }
+
+      return {
+        x: avoidX,
+        y: avoidY
+      };
+    }
+
+    function getSaferMosquitoTurnSign(mosquito) {
+      const clockwiseScore = scoreMosquitoTurnSign(mosquito, 1);
+      const counterClockwiseScore = scoreMosquitoTurnSign(mosquito, -1);
+
+      if (Math.abs(clockwiseScore - counterClockwiseScore) > 0.0001) {
+        return clockwiseScore > counterClockwiseScore ? 1 : -1;
+      }
+
+      const centerAngle = Math.atan2(
+        (BOUNDARY.west + BOUNDARY.east) / 2 - mosquito.x,
+        (BOUNDARY.south + BOUNDARY.north) / 2 - mosquito.y
+      );
+      const centerDelta = signedAngleDifference(centerAngle, mosquito.angle);
+
+      return Math.sign(centerDelta) || 1;
+    }
+
+    function scoreMosquitoTurnSign(mosquito, turnSign) {
+      let x = mosquito.x;
+      let y = mosquito.y;
+      let angle = mosquito.angle;
+      let bestClearance = getBoundaryClearance(x, y);
+
+      for (
+        let elapsed = 0;
+        elapsed < MOSQUITO_PERIMETER_TEST_SECONDS;
+        elapsed += MOSQUITO_PERIMETER_TEST_STEP
+      ) {
+        angle = wrapAngle(angle + turnSign * MOSQUITO_MAX_TURN_RATE * MOSQUITO_PERIMETER_TEST_STEP);
+        x += Math.sin(angle) * MOSQUITO_SPEED * MOSQUITO_PERIMETER_TEST_STEP;
+        y += Math.cos(angle) * MOSQUITO_SPEED * MOSQUITO_PERIMETER_TEST_STEP;
+        bestClearance = Math.min(bestClearance, getBoundaryClearance(x, y));
+      }
+
+      return bestClearance;
+    }
+
+    function getBoundaryClearance(x, y) {
+      return Math.min(
+        x - BOUNDARY.west,
+        BOUNDARY.east - x,
+        y - BOUNDARY.south,
+        BOUNDARY.north - y
+      );
+    }
+
+    function getBatMosquitoDistanceUnits() {
+      return Math.hypot(
+        state.mosquito.x - state.bat.x,
+        state.mosquito.y - state.bat.y
+      );
+    }
+
+    function endGame() {
+      if (state.isCaught) {
+        return;
+      }
+
+      state.isCaught = true;
+      input.forward = false;
+      input.backward = false;
+      input.left = false;
+      input.right = false;
+      state.bat.velocityX = 0;
+      state.bat.velocityY = 0;
+      state.mosquito.velocityX = 0;
+      state.mosquito.velocityY = 0;
+
+      if (caughtOverlay) {
+        caughtOverlay.hidden = false;
+      }
+
+      if (tryAgainButton) {
+        tryAgainButton.focus();
+      }
+
+      setAudioStatus("Caught the mosquito. Press try again to reset the flight.");
+    }
+
+    function resetGame() {
+      Object.assign(state.bat, createInitialBatState());
+      Object.assign(state.mosquito, createInitialMosquitoState());
+      state.isCaught = false;
+      input.forward = false;
+      input.backward = false;
+      input.left = false;
+      input.right = false;
+
+      if (caughtOverlay) {
+        caughtOverlay.hidden = true;
+      }
+
+      updateMosquitoAudio();
+      setAudioStatus(audioRunning
+        ? "mosquito pitch includes the doppler shift from relative motion."
+        : "press start to begin the mosquito sound."
+      );
+    }
+
+    function updateMosquitoAudio() {
       const dx = state.mosquito.x - state.bat.x;
       const dy = state.mosquito.y - state.bat.y;
       const distanceUnits = Math.hypot(dx, dy);
@@ -362,11 +539,11 @@
       const forwardOffset = dx * forwardX + dy * forwardY;
       const planarDistance = Math.hypot(lateralOffset, forwardOffset);
       const pan = planarDistance < 0.0001 ? 0 : 0.9 * (lateralOffset / planarDistance);
-      const velocityX = Math.sin(state.bat.angle) * MOVE_SPEED * moveDirection;
-      const velocityY = Math.cos(state.bat.angle) * MOVE_SPEED * moveDirection;
+      const relativeVelocityX = state.mosquito.velocityX - state.bat.velocityX;
+      const relativeVelocityY = state.mosquito.velocityY - state.bat.velocityY;
       const distanceRateUnitsPerSecond = distanceUnits < 0.0001
         ? 0
-        : -((dx * velocityX) + (dy * velocityY)) / distanceUnits;
+        : ((dx * relativeVelocityX) + (dy * relativeVelocityY)) / distanceUnits;
       const distanceRateFeetPerSecond = distanceRateUnitsPerSecond / WORLD_UNITS_PER_FOOT;
 
       mosquitoAudio.updateSpatial(distanceFeet, pan, distanceRateFeetPerSecond);
@@ -387,45 +564,6 @@
     }
 
     return trees;
-  }
-
-  function drawBoundaryTreesOnMap(ctx, treeImage, boundaryTrees, drawWidth, drawHeight) {
-    for (const tree of boundaryTrees) {
-      const screenX = worldToScreenX(tree.x);
-      const screenY = worldToScreenY(tree.y) + MAP_TREE_Y_OFFSET;
-
-      ctx.drawImage(
-        treeImage,
-        screenX - drawWidth / 2,
-        screenY - drawHeight,
-        drawWidth,
-        drawHeight
-      );
-    }
-  }
-
-  function drawImageSpriteOnMap(ctx, image, worldX, worldY, angle, drawWidth, drawHeight) {
-    const screenX = worldToScreenX(worldX);
-    const screenY = worldToScreenY(worldY);
-
-    ctx.save();
-    ctx.translate(screenX, screenY);
-    ctx.rotate(angle);
-    ctx.drawImage(image, -drawWidth / 2, -drawHeight / 2, drawWidth, drawHeight);
-    ctx.restore();
-  }
-
-  function drawPixelSpriteOnMap(ctx, sprite, worldX, worldY, angle) {
-    const screenX = worldToScreenX(worldX);
-    const screenY = worldToScreenY(worldY);
-
-    ctx.save();
-    ctx.imageSmoothingEnabled = false;
-    ctx.translate(screenX, screenY);
-    ctx.rotate(angle);
-    ctx.drawImage(sprite, -5, -5);
-    ctx.restore();
-    ctx.imageSmoothingEnabled = true;
   }
 
   function drawBillboard(ctx, image, projection) {
@@ -488,121 +626,13 @@
     };
   }
 
-  function drawFovCone(ctx, bat) {
-    const leftHit = castBoundaryRay(
-      bat.x,
-      bat.y,
-      Math.sin(bat.angle - HALF_FOV),
-      Math.cos(bat.angle - HALF_FOV)
-    );
-    const rightHit = castBoundaryRay(
-      bat.x,
-      bat.y,
-      Math.sin(bat.angle + HALF_FOV),
-      Math.cos(bat.angle + HALF_FOV)
-    );
-
-    const batX = worldToScreenX(bat.x);
-    const batY = worldToScreenY(bat.y);
-    const leftX = worldToScreenX(bat.x + Math.sin(bat.angle - HALF_FOV) * leftHit.distance);
-    const leftY = worldToScreenY(bat.y + Math.cos(bat.angle - HALF_FOV) * leftHit.distance);
-    const rightX = worldToScreenX(bat.x + Math.sin(bat.angle + HALF_FOV) * rightHit.distance);
-    const rightY = worldToScreenY(bat.y + Math.cos(bat.angle + HALF_FOV) * rightHit.distance);
-
-    ctx.fillStyle = "rgba(122, 193, 255, 0.1)";
-    ctx.strokeStyle = "rgba(122, 193, 255, 0.38)";
-    ctx.lineWidth = 1.5;
-    ctx.beginPath();
-    ctx.moveTo(batX, batY);
-    ctx.lineTo(leftX, leftY);
-    ctx.lineTo(rightX, rightY);
-    ctx.closePath();
-    ctx.fill();
-    ctx.stroke();
-  }
-
-  function castBoundaryRay(originX, originY, dirX, dirY) {
-    let bestDistance = Infinity;
-
-    if (dirX > 0.000001) {
-      const distance = (BOUNDARY.east - originX) / dirX;
-      const hitY = originY + dirY * distance;
-      if (distance > 0 && hitY >= BOUNDARY.south && hitY <= BOUNDARY.north && distance < bestDistance) {
-        bestDistance = distance;
-      }
-    } else if (dirX < -0.000001) {
-      const distance = (BOUNDARY.west - originX) / dirX;
-      const hitY = originY + dirY * distance;
-      if (distance > 0 && hitY >= BOUNDARY.south && hitY <= BOUNDARY.north && distance < bestDistance) {
-        bestDistance = distance;
-      }
-    }
-
-    if (dirY > 0.000001) {
-      const distance = (BOUNDARY.north - originY) / dirY;
-      const hitX = originX + dirX * distance;
-      if (distance > 0 && hitX >= BOUNDARY.west && hitX <= BOUNDARY.east && distance < bestDistance) {
-        bestDistance = distance;
-      }
-    } else if (dirY < -0.000001) {
-      const distance = (BOUNDARY.south - originY) / dirY;
-      const hitX = originX + dirX * distance;
-      if (distance > 0 && hitX >= BOUNDARY.west && hitX <= BOUNDARY.east && distance < bestDistance) {
-        bestDistance = distance;
-      }
-    }
-
-    return { distance: bestDistance };
-  }
-
-  function drawCompass(ctx) {
-    ctx.fillStyle = "rgba(255, 255, 255, 0.88)";
-    ctx.font = '700 28px "Trebuchet MS", "Lucida Sans Unicode", sans-serif';
-    ctx.fillText("N", SCREEN_WIDTH - 42, 42);
-
-    ctx.strokeStyle = "rgba(255, 255, 255, 0.72)";
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-    ctx.moveTo(SCREEN_WIDTH - 28, 54);
-    ctx.lineTo(SCREEN_WIDTH - 28, 82);
-    ctx.stroke();
-
-    ctx.beginPath();
-    ctx.moveTo(SCREEN_WIDTH - 28, 54);
-    ctx.lineTo(SCREEN_WIDTH - 35, 64);
-    ctx.lineTo(SCREEN_WIDTH - 21, 64);
-    ctx.closePath();
-    ctx.fill();
-  }
-
-  function drawMapHud(ctx) {
-    ctx.fillStyle = "rgba(6, 11, 20, 0.62)";
-    ctx.fillRect(18, 18, 476, 102);
-
-    ctx.fillStyle = "#eef6ff";
-    ctx.font = '700 16px "Trebuchet MS", "Lucida Sans Unicode", sans-serif';
-    ctx.fillText("Shared world state", 32, 46);
-
-    ctx.fillStyle = "#a9bad0";
-    ctx.font = '14px "Trebuchet MS", "Lucida Sans Unicode", sans-serif';
-    ctx.fillText("Bat: move with W/S or arrows, turn with A/D or arrows", 32, 68);
-    ctx.fillText("Mosquito sprite: game/mosquito.png. Boundary: repeated tree sprites.", 32, 88);
-    ctx.fillText("Mosquito audio: 2 dB quieter at max, then amplitude falls as 1/d after 1 ft.", 32, 108);
-  }
-
   function drawFirstPersonHud(ctx) {
     ctx.fillStyle = "rgba(6, 11, 20, 0.62)";
-    ctx.fillRect(18, 18, 612, 112);
+    ctx.fillRect(18, 18, 452, 52);
 
     ctx.fillStyle = "#eef6ff";
-    ctx.font = '700 16px "Trebuchet MS", "Lucida Sans Unicode", sans-serif';
-    ctx.fillText("65 degree horizontal FOV", 32, 46);
-
-    ctx.fillStyle = "#a9bad0";
     ctx.font = '14px "Trebuchet MS", "Lucida Sans Unicode", sans-serif';
-    ctx.fillText("Tree height = 2x flight height. 120 Hz fixed simulation step.", 32, 68);
-    ctx.fillText("Mosquito mix pans smoothly: +/-90 degrees maps to +/-90% pan.", 32, 88);
-    ctx.fillText("Pitch uses doppler shift from radial motion with sound speed reduced to 1/10 real.", 32, 108);
+    ctx.fillText("mosquito pitch includes the doppler shift from relative motion", 32, 50);
   }
 
   function drawStatus(ctx, title, detail) {
@@ -633,40 +663,17 @@
     });
   }
 
-  function createPixelSprite(rows, palette) {
-    const sprite = document.createElement("canvas");
-    sprite.width = rows[0].length;
-    sprite.height = rows.length;
-
-    const ctx = sprite.getContext("2d");
-    ctx.imageSmoothingEnabled = false;
-
-    for (let y = 0; y < rows.length; y += 1) {
-      for (let x = 0; x < rows[y].length; x += 1) {
-        const key = rows[y][x];
-        const color = palette[key];
-        if (!color) {
-          continue;
-        }
-
-        ctx.fillStyle = color;
-        ctx.fillRect(x, y, 1, 1);
-      }
-    }
-
-    return sprite;
-  }
-
-  function worldToScreenX(worldX) {
-    return (worldX / WORLD_WIDTH) * SCREEN_WIDTH;
-  }
-
-  function worldToScreenY(worldY) {
-    return SCREEN_HEIGHT - (worldY / WORLD_DEPTH) * SCREEN_HEIGHT;
-  }
-
   function clamp(value, min, max) {
     return Math.min(max, Math.max(min, value));
+  }
+
+  function randomInRange(min, max) {
+    return min + Math.random() * (max - min);
+  }
+
+  function signedAngleDifference(targetAngle, currentAngle) {
+    const circle = Math.PI * 2;
+    return ((((targetAngle - currentAngle) + Math.PI) % circle) + circle) % circle - Math.PI;
   }
 
   function wrapAngle(angle) {
@@ -684,11 +691,6 @@
     }
 
     audioStatus.innerHTML = `<strong>Audio:</strong> ${message}`;
-  }
-
-  function formatSignedNumber(value) {
-    const rounded = Number(value).toFixed(1);
-    return value >= 0 ? `+${rounded}` : rounded;
   }
 
   function getMosquitoSoundCode() {
