@@ -1,11 +1,11 @@
 :root {
-  --bg: #f5f1e8;
-  --panel: #fbf8f1;
-  --panel-strong: #fffdfa;
+  --bg: #eef1f3;
+  --panel: #f6f7f8;
+  --panel-strong: #fcfdfe;
   --ink: #1d2929;
   --muted: #5d6a6a;
-  --accent: #c95e39;
-  --accent-deep: #8f3f24;
+  --accent: #2f7a43;
+  --accent-deep: #1f542d;
   --border: rgba(29, 41, 41, 0.14);
 }
 
@@ -34,7 +34,7 @@ body {
 .hero {
   padding: 0.8rem;
   border: 1px solid var(--border);
-  border-radius: 10px;
+  border-radius: 0;
   background: var(--panel);
 }
 
@@ -79,7 +79,7 @@ body {
   margin-top: 0.65rem;
   padding: 0.65rem;
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: 0;
   background: var(--panel-strong);
 }
 
@@ -98,8 +98,8 @@ body {
   resize: vertical;
   padding: 0.45rem 0.55rem;
   border: 1px solid rgba(30, 47, 47, 0.15);
-  border-radius: 6px;
-  background: #fff;
+  border-radius: 0;
+  background: #f7f9fa;
   color: var(--ink);
   font: 12px/1.35 Consolas, "Courier New", monospace;
 }
@@ -122,7 +122,7 @@ body {
 .oscillator-card {
   border: 1px solid var(--border);
   background: var(--panel-strong);
-  border-radius: 8px;
+  border-radius: 0;
 }
 
 .global-panel {
@@ -144,7 +144,7 @@ body {
 .secondary-button,
 .ghost-button {
   appearance: none;
-  border-radius: 6px;
+  border-radius: 0;
   padding: 0.45rem 0.7rem;
   font: inherit;
   font-weight: 700;
@@ -152,20 +152,20 @@ body {
 }
 
 .primary-button {
-  border: 1px solid #b45533;
+  border: 1px solid #255f35;
   background: var(--accent);
   color: #fff;
 }
 
 .secondary-button {
-  border: 1px solid rgba(54, 112, 108, 0.28);
-  background: #edf6f5;
-  color: #204a48;
+  border: 1px solid rgba(47, 122, 67, 0.22);
+  background: #eef2f0;
+  color: #254030;
 }
 
 .ghost-button {
   border: 1px solid rgba(30, 47, 47, 0.12);
-  background: #fff;
+  background: #f7f9fa;
   color: var(--ink);
 }
 
@@ -184,20 +184,20 @@ body {
   display: inline-block;
   min-width: 4.6rem;
   padding: 0.1rem 0.25rem;
-  border-radius: 4px;
+  border-radius: 0;
   cursor: text;
   user-select: text;
-  border: 1px dashed rgba(201, 94, 57, 0.4);
-  background: #fff7f2;
+  border: 1px dashed rgba(47, 122, 67, 0.4);
+  background: #f1f4f2;
 }
 
 .editable-value:focus {
-  outline: 1px solid rgba(201, 94, 57, 0.45);
+  outline: 1px solid rgba(47, 122, 67, 0.45);
   outline-offset: 1px;
 }
 
 .editable-value.is-editing {
-  background: #fff;
+  background: #f7f9fa;
   border-style: solid;
 }
 
@@ -276,8 +276,8 @@ body {
 .control {
   padding: 0.35rem 0.4rem;
   border: 1px solid rgba(30, 47, 47, 0.08);
-  border-radius: 6px;
-  background: #fff;
+  border-radius: 0;
+  background: #f7f9fa;
 }
 
 .control-label,
@@ -295,9 +295,9 @@ input[type="range"] {
 select {
   width: 100%;
   padding: 0.3rem 0.4rem;
-  border-radius: 4px;
+  border-radius: 0;
   border: 1px solid rgba(30, 47, 47, 0.15);
-  background: #fff;
+  background: #f7f9fa;
   color: var(--ink);
   font: inherit;
 }
@@ -336,11 +336,6 @@ select {
   .page-shell {
     width: min(100% - 0.5rem, 1240px);
     padding-top: 0.25rem;
-  }
-
-  .hero,
-  .oscillator-card {
-    border-radius: 8px;
   }
 
   .control-grid {

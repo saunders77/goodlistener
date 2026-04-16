@@ -15,6 +15,8 @@
   var suppressStateRefresh = false;
   var DEFAULT_MASTER_VOLUME = -2.5;
   var COMPACT_STATE_PREFIX = "g2:";
+  var URL_SAFE_STATE_PREFIX = "g2-";
+  var STATE_QUERY_PARAM = "code";
   var LOG_CONTROL_RANGES = {
     frequency: {
       min: 20,
@@ -253,6 +255,39 @@
     return COMPACT_STATE_PREFIX + state.oscillators.map(serializeOscillator).join("|");
   }
 
+  function toUrlSafeStateCode(compactCode) {
+    var trimmed = compactCode.trim();
+
+    if (trimmed === COMPACT_STATE_PREFIX.slice(0, -1)) {
+      return URL_SAFE_STATE_PREFIX.slice(0, -1);
+    }
+
+    if (!trimmed.startsWith(COMPACT_STATE_PREFIX)) {
+      return trimmed;
+    }
+
+    return URL_SAFE_STATE_PREFIX + trimmed.slice(COMPACT_STATE_PREFIX.length)
+      .replace(/\|/g, "~")
+      .replace(/,/g, "_")
+      .replace(/:/g, "-");
+  }
+
+  function fromUrlSafeStateCode(urlSafeCode) {
+    var trimmed = urlSafeCode.trim();
+
+    if (trimmed === URL_SAFE_STATE_PREFIX.slice(0, -1)) {
+      return COMPACT_STATE_PREFIX.slice(0, -1);
+    }
+
+    if (!trimmed.startsWith(URL_SAFE_STATE_PREFIX)) {
+      return trimmed;
+    }
+
+    return COMPACT_STATE_PREFIX + trimmed.slice(URL_SAFE_STATE_PREFIX.length)
+      .replace(/~/g, "|")
+      .replace(/_/g, ",");
+  }
+
   function decodeLegacyState(code) {
     return JSON.parse(decodeURIComponent(escape(window.atob(code.trim()))));
   }
@@ -324,7 +359,7 @@
   }
 
   function decodeState(code) {
-    var trimmed = code.trim();
+    var trimmed = fromUrlSafeStateCode(code).trim();
 
     if (
       trimmed === COMPACT_STATE_PREFIX.slice(0, -1) ||
@@ -360,11 +395,61 @@
   }
 
   function refreshStateCode() {
+    var compactCode;
+
     if (suppressStateRefresh) {
       return;
     }
 
-    stateCodeInput.value = serializeState(getCurrentState());
+    compactCode = serializeState(getCurrentState());
+    stateCodeInput.value = toUrlSafeStateCode(compactCode);
+    syncAddressBarWithStateCode(stateCodeInput.value);
+  }
+
+  function syncAddressBarWithStateCode(stateCode) {
+    var nextUrl;
+    var params;
+
+    if (!window.history || typeof window.history.replaceState !== "function") {
+      return;
+    }
+
+    params = new URLSearchParams(window.location.search);
+
+    if (stateCode) {
+      params.set(STATE_QUERY_PARAM, stateCode);
+    } else {
+      params.delete(STATE_QUERY_PARAM);
+    }
+
+    nextUrl = window.location.pathname;
+
+    if (params.toString()) {
+      nextUrl += "?" + params.toString();
+    }
+
+    nextUrl += window.location.hash;
+    window.history.replaceState(null, "", nextUrl);
+  }
+
+  function loadStateFromQueryString() {
+    var params = new URLSearchParams(window.location.search);
+    var code = params.get(STATE_QUERY_PARAM);
+
+    if (!code) {
+      return false;
+    }
+
+    stateCodeInput.value = code;
+
+    try {
+      applyState(decodeState(code));
+      return true;
+    } catch (error) {
+      audioStatus.textContent = "The code in the URL could not be loaded.";
+      refreshStateCode();
+      return false;
+    }
   }
 
   function clearAllOscillators() {
@@ -420,7 +505,7 @@
     refreshStateCode();
 
     if (state.oscillators.length) {
-      audioStatus.textContent = "State code loaded.";
+      audioStatus.textContent = "State code loaded. Click each On checkbox to start each oscillator.";
     } else {
       audioStatus.textContent = "State code loaded. No oscillators were included.";
     }
@@ -761,5 +846,8 @@
     },
     "master volume"
   );
-  refreshStateCode();
+
+  if (!loadStateFromQueryString()) {
+    refreshStateCode();
+  }
 }());

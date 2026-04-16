@@ -4,13 +4,12 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>goodlistener | Web Audio Test Bench</title>
-  <link rel="stylesheet" href="styles.css">
+  <link rel="stylesheet" href="styles.css?v=2">
 </head>
 <body>
   <main class="page-shell">
     <section class="hero">
-      <p class="eyebrow">goodlistener</p>
-      <h1>Web Audio Test Bench</h1>
+      <h1>Web Audio Testing</h1>
       <p class="hero-copy">
         Spin up as many oscillators as you want, shape them independently, and hear changes in real time.
         Start audio once, then add voices as you go.
@@ -24,7 +23,7 @@
             class="state-code"
             rows="4"
             spellcheck="false"
-            placeholder="Your oscillator state code will appear here."
+            placeholder="Your URL-safe oscillator state code will appear here."
           ></textarea>
         </label>
 
@@ -34,7 +33,7 @@
         </div>
 
         <p class="state-note">
-          Copy this code, open the page in a new window or tab, paste it here, and click Load Code to restore the full oscillator setup.
+           If you already have a code, paste it here and click Load Code to get the full oscillator setup. The code is also in the URL which you can copy/paste to share.
         </p>
       </section>
 
@@ -59,12 +58,8 @@
     <section class="oscillator-section">
       <div class="section-heading">
         <div>
-          <p class="section-kicker">Voices</p>
           <h2>Oscillators</h2>
         </div>
-        <p class="section-note">
-          Each card has its own output, modulation, panning, and effects chain.
-        </p>
       </div>
 
       <div id="oscillator-list" class="oscillator-list" aria-live="polite"></div>
@@ -81,7 +76,6 @@
     <article class="oscillator-card">
       <div class="oscillator-header">
         <div>
-          <p class="card-kicker">Signal Path</p>
           <h3 class="oscillator-title">Oscillator</h3>
         </div>
         <div class="oscillator-actions">
@@ -179,7 +173,7 @@
     </article>
   </template>
 
-  <script src="audio-engine.js"></script>
-  <script src="app.js"></script>
+  <script src="audio-engine.js?v=2"></script>
+  <script src="app.js?v=2"></script>
 </body>
 </html>
