@@ -17,6 +17,7 @@
   const MOVE_SPEED = WORLD_DEPTH * 0.08;
   const TURN_SPEED = Math.PI;
   const MOSQUITO_SPEED = MOVE_SPEED * 0.5;
+  const HARD_MODE_REFERENCE_DISTANCE_FEET = 3;
   const MOSQUITO_INITIAL_ANGLE = Math.PI / 2;
   const MOSQUITO_TURN_RATE_CHANGE_SECONDS = 1;
   const MOSQUITO_MAX_TURN_RATE = Math.PI / 2;
@@ -58,12 +59,30 @@
     ArrowRight: "right"
   };
 
+  const DIFFICULTIES = {
+    easy: {
+      hasVision: true,
+      hasStereoHearing: true,
+      hasProximityVolume: true
+    },
+    medium: {
+      hasVision: false,
+      hasStereoHearing: true,
+      hasProximityVolume: true
+    },
+    hard: {
+      hasVision: false,
+      hasStereoHearing: false,
+      hasProximityVolume: false
+    }
+  };
+
   const firstPersonCanvas = document.getElementById("first-person-view");
   const audioStatus = document.getElementById("audio-status");
   const startOverlay = document.getElementById("start-overlay");
-  const startButton = document.getElementById("start-button");
   const caughtOverlay = document.getElementById("caught-overlay");
-  const tryAgainButton = document.getElementById("try-again");
+  const startDifficultyButtons = Array.from(document.querySelectorAll("#start-overlay [data-difficulty]"));
+  const retryDifficultyButtons = Array.from(document.querySelectorAll("#caught-overlay [data-difficulty]"));
   const firstPersonCtx = firstPersonCanvas.getContext("2d");
 
   drawStatus(firstPersonCtx, "Loading assets", "Preparing mosquito, tree, and sound assets...");
@@ -108,17 +127,21 @@
     const mosquitoAudio = new window.GoodListenerGameAudio.MosquitoAudio(mosquitoSoundCode);
     let audioRunning = false;
     let isStarted = false;
+    let selectedDifficultyKey = "easy";
 
     firstPersonCtx.imageSmoothingEnabled = true;
 
     updateMosquitoAudio();
     //setAudioStatus("press start to begin the mosquito sound.");
 
-    if (startButton) {
-      startButton.disabled = false;
-      startButton.addEventListener("click", startRound);
-      startButton.focus();
+    for (const button of startDifficultyButtons) {
+      button.disabled = false;
+      button.addEventListener("click", () => {
+        startRound(button.dataset.difficulty);
+      });
     }
+
+    focusDifficultyButton(startDifficultyButtons, selectedDifficultyKey);
 
     window.addEventListener(
       "keydown",
@@ -154,8 +177,11 @@
       input.right = false;
     });
 
-    if (tryAgainButton) {
-      tryAgainButton.addEventListener("click", resetGame);
+    for (const button of retryDifficultyButtons) {
+      button.disabled = false;
+      button.addEventListener("click", () => {
+        resetGame(button.dataset.difficulty);
+      });
     }
 
     let previousTime = performance.now();
@@ -223,6 +249,12 @@
     }
 
     function drawFirstPersonView() {
+      if (isStarted && !state.isCaught && !getSelectedDifficulty().hasVision) {
+        firstPersonCtx.fillStyle = "#000";
+        firstPersonCtx.fillRect(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT);
+        return;
+      }
+
       const sky = firstPersonCtx.createLinearGradient(0, 0, 0, HORIZON_Y);
       sky.addColorStop(0, "#061321");
       sky.addColorStop(1, "#24415f");
@@ -327,7 +359,8 @@
         });
     }
 
-    function startRound() {
+    function startRound(difficultyKey) {
+      selectedDifficultyKey = getDifficultyKey(difficultyKey);
       isStarted = true;
       previousTime = performance.now();
       accumulator = 0;
@@ -499,14 +532,12 @@
         caughtOverlay.hidden = false;
       }
 
-      if (tryAgainButton) {
-        tryAgainButton.focus();
-      }
-
-      setAudioStatus("Caught the mosquito. Press try again to reset the flight.");
+      focusDifficultyButton(retryDifficultyButtons, selectedDifficultyKey);
+      setAudioStatus("Caught the mosquito. Choose a difficulty to start another round.");
     }
 
-    function resetGame() {
+    function resetGame(difficultyKey) {
+      selectedDifficultyKey = getDifficultyKey(difficultyKey);
       Object.assign(state.bat, createInitialBatState());
       Object.assign(state.mosquito, createInitialMosquitoState());
       state.isCaught = false;
@@ -546,8 +577,30 @@
         ? 0
         : ((dx * relativeVelocityX) + (dy * relativeVelocityY)) / distanceUnits;
       const distanceRateFeetPerSecond = distanceRateUnitsPerSecond / WORLD_UNITS_PER_FOOT;
+      const difficulty = getSelectedDifficulty();
+      const spatialDistanceFeet = difficulty.hasProximityVolume
+        ? distanceFeet
+        : HARD_MODE_REFERENCE_DISTANCE_FEET;
+      const spatialPan = difficulty.hasStereoHearing ? pan : 0;
 
-      mosquitoAudio.updateSpatial(distanceFeet, pan, distanceRateFeetPerSecond);
+      mosquitoAudio.updateSpatial(spatialDistanceFeet, spatialPan, distanceRateFeetPerSecond);
+    }
+
+    function getDifficultyKey(difficultyKey) {
+      return Object.prototype.hasOwnProperty.call(DIFFICULTIES, difficultyKey) ? difficultyKey : "easy";
+    }
+
+    function getSelectedDifficulty() {
+      return DIFFICULTIES[selectedDifficultyKey];
+    }
+
+    function focusDifficultyButton(buttons, difficultyKey) {
+      const nextDifficultyKey = getDifficultyKey(difficultyKey);
+      const buttonToFocus = buttons.find((button) => button.dataset.difficulty === nextDifficultyKey) || buttons[0];
+
+      if (buttonToFocus) {
+        buttonToFocus.focus();
+      }
     }
   }
 

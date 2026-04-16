@@ -66,12 +66,21 @@
     }
 
     .game-dialog {
+      width: min(720px, 100%);
+      padding: 1.25rem;
+      border: 1px solid rgba(238, 246, 255, 0.18);
+      border-radius: 18px;
+      background: rgba(5, 10, 16, 0.82);
+      box-shadow: 0 16px 40px rgba(0, 0, 0, 0.35);
+      color: #eaf4ff;
       text-align: center;
     }
 
     .game-dialog h2 {
       margin: 0 0 1rem;
-      font: inherit;
+      color: #f7fbff;
+      font-size: 1.35rem;
+      font-weight: 700;
     }
 
     .caught-dialog h2 {
@@ -91,9 +100,23 @@
       opacity: 0.62;
     }
 
-    #start-button {
-      padding: 0.7rem 1.4rem;
-      font-size: 1.5rem;
+    .mode-buttons {
+      display: grid;
+      gap: 0.75rem;
+      width: min(720px, 100%);
+      margin: 0 auto;
+    }
+
+    .mode-button {
+      width: 100%;
+      padding: 0.85rem 1rem;
+      border: 1px solid #cad6e4;
+      border-radius: 14px;
+      background: #f5f8fc;
+      color: #102033;
+      font-size: 1rem;
+      line-height: 1.35;
+      text-align: left;
     }
 
     .world-view {
@@ -117,7 +140,7 @@
   <main class="page">
     <header class="top-bar">
       <h1>Catch the mosquito</h1>
-      <p>Use the keyboard to move, then listen for the mosquito. Its pitch changes with the doppler effect from relative motion. For a challenge, play with your eyes closed.</p>
+      <p>Use the keyboard to move, then listen for the mosquito. Its pitch changes with the doppler effect from relative motion.</p>
       <div class="controls" aria-label="Keyboard controls">
         <span><kbd>W</kbd> / <kbd>Up</kbd>: forward</span>
         <span><kbd>S</kbd> / <kbd>Down</kbd>: backward</span>
@@ -138,10 +161,15 @@
         class="game-overlay"
         role="dialog"
         aria-modal="true"
-        aria-label="Start game"
+        aria-label="Choose difficulty"
       >
         <div class="game-dialog">
-          <button id="start-button" type="button" disabled>start</button>
+          <h2>Choose a difficulty</h2>
+          <div class="mode-buttons">
+            <button class="mode-button" type="button" data-difficulty="easy" disabled>Easy: includes vision, stereo hearing, and proximity volume</button>
+            <button class="mode-button" type="button" data-difficulty="medium" disabled>Medium: you're blind</button>
+            <button class="mode-button" type="button" data-difficulty="hard" disabled>Hard: you're blind and can only distinguish pitch</button>
+          </div>
         </div>
       </div>
 
@@ -155,7 +183,11 @@
       >
         <div class="game-dialog caught-dialog">
           <h2 id="caught-title">caught the mosquito!</h2>
-          <button id="try-again" type="button">try again</button>
+          <div class="mode-buttons">
+            <button class="mode-button" type="button" data-difficulty="easy" disabled>Easy: includes vision, stereo hearing, and proximity volume</button>
+            <button class="mode-button" type="button" data-difficulty="medium" disabled>Medium: you're blind</button>
+            <button class="mode-button" type="button" data-difficulty="hard" disabled>Hard: you're blind and can only distinguish pitch</button>
+          </div>
         </div>
       </div>
     </div>
