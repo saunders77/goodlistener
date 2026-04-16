@@ -20,10 +20,11 @@
   };
   const MAX_OUTPUT_DB = -2;
   const STARTUP_FADE_SECONDS = 0.12;
+  const MUTE_FADE_SECONDS = 0.025;
   const SPATIAL_SMOOTHING_SECONDS = 0.075;
   const DOPPLER_SMOOTHING_SECONDS = 0.06;
   const REAL_SPEED_OF_SOUND_FT_PER_SECOND = 343 * 3.280839895013123;
-  const SIMULATED_SPEED_OF_SOUND_FT_PER_SECOND = REAL_SPEED_OF_SOUND_FT_PER_SECOND / 10;
+  const SIMULATED_SPEED_OF_SOUND_FT_PER_SECOND = REAL_SPEED_OF_SOUND_FT_PER_SECOND / 20;
   const ALIAS_TO_CONTROL = {
     a: "active",
     w: "waveform",
@@ -294,12 +295,14 @@
     this.voiceBus = null;
     this.outputTrimGain = null;
     this.startupGain = null;
+    this.muteGain = null;
     this.distanceGain = null;
     this.scenePan = null;
     this.voices = [];
     this.pendingGain = 0;
     this.pendingPan = 0;
     this.pendingPitchFactor = 1;
+    this.isMuted = false;
     this.startPromise = null;
     this.outputTrimDb = MAX_OUTPUT_DB;
   }
@@ -319,17 +322,20 @@
     this.voiceBus = this.context.createGain();
     this.outputTrimGain = this.context.createGain();
     this.startupGain = this.context.createGain();
+    this.muteGain = this.context.createGain();
     this.distanceGain = this.context.createGain();
     this.scenePan = this.context.createStereoPanner();
 
     this.voiceBus.connect(this.outputTrimGain);
     this.outputTrimGain.connect(this.startupGain);
-    this.startupGain.connect(this.distanceGain);
+    this.startupGain.connect(this.muteGain);
+    this.muteGain.connect(this.distanceGain);
     this.distanceGain.connect(this.scenePan);
     this.scenePan.connect(this.context.destination);
 
     this.outputTrimGain.gain.value = dbfsToGain(this.outputTrimDb);
     this.startupGain.gain.value = 0;
+    this.muteGain.gain.value = this.isMuted ? 0 : 1;
     this.distanceGain.gain.value = this.pendingGain;
     this.scenePan.pan.value = this.pendingPan;
 
@@ -364,6 +370,21 @@
       });
 
     return this.startPromise;
+  };
+
+  MosquitoAudio.prototype.setMuted = function (isMuted) {
+    this.isMuted = Boolean(isMuted);
+
+    if (!this.context || !this.muteGain) {
+      return;
+    }
+
+    const now = this.context.currentTime;
+    const targetGain = this.isMuted ? 0 : 1;
+
+    this.muteGain.gain.cancelScheduledValues(now);
+    this.muteGain.gain.setValueAtTime(this.muteGain.gain.value, now);
+    this.muteGain.gain.linearRampToValueAtTime(targetGain, now + MUTE_FADE_SECONDS);
   };
 
   MosquitoAudio.prototype.updateSpatial = function (distanceFeet, pan, distanceRateFeetPerSecond) {
@@ -420,6 +441,10 @@
 
     if (this.startupGain) {
       this.startupGain.disconnect();
+    }
+
+    if (this.muteGain) {
+      this.muteGain.disconnect();
     }
 
     if (this.outputTrimGain) {

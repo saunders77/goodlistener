@@ -5,96 +5,47 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>GoodListener</title>
   <style>
-    :root {
-      --bg: #050912;
-      --panel: rgba(11, 20, 34, 0.9);
-      --panel-border: rgba(203, 228, 255, 0.12);
-      --ink: #eef6ff;
-      --muted: #a3b4c8;
-      --accent: #f4de59;
-      --accent-deep: #caa31f;
-    }
-
     * {
       box-sizing: border-box;
     }
 
-    html,
     body {
       margin: 0;
-      min-height: 100%;
-    }
-
-    body {
-      background:
-        radial-gradient(circle at top, rgba(78, 128, 198, 0.16), transparent 34%),
-        linear-gradient(180deg, #08111e 0%, #050912 62%, #04060b 100%);
-      color: var(--ink);
-      font: 15px/1.45 "Trebuchet MS", "Lucida Sans Unicode", sans-serif;
+      font: 15px/1.4 sans-serif;
     }
 
     .page {
-      width: min(1320px, calc(100% - 1.25rem));
+      width: min(1320px, calc(100% - 1rem));
       margin: 0 auto;
-      padding: 1rem 0 1.5rem;
+      padding: 0.5rem 0;
     }
 
-    .hero {
-      margin-bottom: 1rem;
-      padding: 1rem 1.1rem;
-      border: 1px solid var(--panel-border);
-      border-radius: 18px;
-      background:
-        linear-gradient(180deg, rgba(19, 31, 52, 0.95), rgba(9, 16, 28, 0.94)),
-        rgba(9, 16, 28, 0.94);
-      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.28);
+    .top-bar {
+      margin-bottom: 0.75rem;
     }
 
-    .eyebrow {
-      margin: 0 0 0.2rem;
-      color: var(--accent);
-      font-size: 0.72rem;
-      font-weight: 700;
-      letter-spacing: 0.18em;
-      text-transform: uppercase;
+    .top-bar h1 {
+      margin: 0 0 0.35rem;
+      font-size: 1.6rem;
     }
 
-    h1 {
-      margin: 0;
-      font-size: clamp(1.6rem, 3vw, 2.35rem);
-      line-height: 1.08;
-    }
-
-    .hero p {
-      margin: 0.55rem 0 0;
-      max-width: 72ch;
-      color: var(--muted);
-    }
-
-    .meta {
-      margin-top: 0.8rem;
+    .controls {
       display: flex;
       flex-wrap: wrap;
-      gap: 0.5rem;
+      gap: 0.45rem 1rem;
+      margin: 0 0 0.5rem;
     }
 
-    .meta span {
-      padding: 0.35rem 0.65rem;
-      border-radius: 999px;
-      border: 1px solid rgba(244, 222, 89, 0.2);
-      background: rgba(244, 222, 89, 0.08);
-      color: #f6edb7;
-      font-size: 0.9rem;
+    .controls span {
+      white-space: nowrap;
     }
 
-    .audio-note {
-      margin: 0.8rem 0 0;
-      color: #d9e6f5;
-      font-size: 0.95rem;
-    }
-
-    .audio-note strong {
-      color: #f6edb7;
+    kbd {
+      border: 1px solid #aaa;
+      border-radius: 3px;
+      padding: 0.05rem 0.28rem;
+      background: #f5f5f5;
+      font: 0.95em ui-monospace, SFMono-Regular, Consolas, monospace;
     }
 
     .game-overlay {
@@ -104,45 +55,35 @@
       display: grid;
       place-items: center;
       padding: 1rem;
-      background: rgba(4, 6, 11, 0.68);
-      backdrop-filter: blur(4px);
     }
 
     .game-overlay[hidden] {
       display: none;
     }
 
+    #caught-overlay {
+      background: rgba(255, 0, 0, 0.28);
+    }
+
     .game-dialog {
-      width: min(360px, 100%);
-      padding: 1.35rem;
-      border: 1px solid rgba(244, 222, 89, 0.28);
-      border-radius: 8px;
-      background: rgba(9, 16, 28, 0.95);
-      box-shadow: 0 18px 54px rgba(0, 0, 0, 0.42);
       text-align: center;
     }
 
     .game-dialog h2 {
       margin: 0 0 1rem;
-      color: var(--ink);
-      font-size: clamp(1.6rem, 5vw, 2.4rem);
-      line-height: 1.05;
+      font: inherit;
+    }
+
+    .caught-dialog h2 {
+      color: white;
+      font-size: clamp(2rem, 7vw, 4rem);
+      font-weight: 700;
+      text-shadow: 0 2px 8px black;
     }
 
     .game-dialog button {
-      min-width: 9rem;
-      border: 0;
-      border-radius: 8px;
-      padding: 0.7rem 1rem;
-      background: linear-gradient(180deg, var(--accent), var(--accent-deep));
-      color: #101013;
       cursor: pointer;
-      font: 700 1rem/1 "Trebuchet MS", "Lucida Sans Unicode", sans-serif;
-    }
-
-    .game-dialog button:focus-visible {
-      outline: 3px solid rgba(238, 246, 255, 0.78);
-      outline-offset: 3px;
+      font: inherit;
     }
 
     .game-dialog button:disabled {
@@ -150,45 +91,13 @@
       opacity: 0.62;
     }
 
-    .views {
-      display: grid;
-      gap: 1rem;
-    }
-
-    .panel {
-      border: 1px solid var(--panel-border);
-      border-radius: 18px;
-      background:
-        linear-gradient(180deg, rgba(14, 22, 37, 0.95), rgba(8, 13, 23, 0.94)),
-        rgba(8, 13, 23, 0.94);
-      box-shadow: 0 18px 48px rgba(0, 0, 0, 0.24);
-      overflow: hidden;
+    #start-button {
+      padding: 0.7rem 1.4rem;
+      font-size: 1.5rem;
     }
 
     .world-view {
       position: relative;
-      background: #05080f;
-    }
-
-    .panel-header {
-      display: flex;
-      justify-content: space-between;
-      gap: 0.8rem;
-      align-items: baseline;
-      padding: 0.8rem 1rem 0.65rem;
-      border-bottom: 1px solid rgba(203, 228, 255, 0.08);
-    }
-
-    .panel-header h2 {
-      margin: 0;
-      font-size: 1.05rem;
-    }
-
-    .panel-header p {
-      margin: 0;
-      color: var(--muted);
-      font-size: 0.95rem;
-      text-align: right;
     }
 
     canvas {
@@ -199,84 +108,57 @@
       background: #05080f;
     }
 
-    @media (max-width: 760px) {
-      .page {
-        width: min(100% - 0.75rem, 1320px);
-        padding-top: 0.6rem;
-      }
-
-      .hero,
-      .panel {
-        border-radius: 14px;
-      }
-
-      .panel-header {
-        flex-direction: column;
-        align-items: start;
-      }
-
-      .panel-header p {
-        text-align: left;
-      }
+    p {
+      margin: 0 0 0.5rem;
     }
   </style>
 </head>
 <body>
   <main class="page">
-    <section class="hero">
-      <h1>Good Listener</h1>
+    <header class="top-bar">
+      <h1>Catch the mosquito</h1>
       <p>Use the keyboard to move, then listen for the mosquito. Its pitch changes with the doppler effect from relative motion. For a challenge, play with your eyes closed.</p>
-      <div class="meta">
-        <span>W / Up: forward</span>
-        <span>S / Down: backward</span>
-        <span>A / Left and D / Right: turn</span>
+      <div class="controls" aria-label="Keyboard controls">
+        <span><kbd>W</kbd> / <kbd>Up</kbd>: forward</span>
+        <span><kbd>S</kbd> / <kbd>Down</kbd>: backward</span>
+        <span><kbd>A</kbd> / <kbd>Left</kbd> and <kbd>D</kbd> / <kbd>Right</kbd>: turn</span>
       </div>
-      <p id="audio-status" class="audio-note">
-        Click start to begin the chase.
-      </p>
-    </section>
+      <!--<p id="audio-status">Click start to begin the chase.</p>-->
+    </header>
 
-    <section class="views">
-      <article class="panel">
-        <div class="panel-header">
-          <h2>Catch the mosquito by sound</h2>
+    <div class="world-view">
+      <canvas
+        id="first-person-view"
+        width="1280"
+        height="720"
+      ></canvas>
+
+      <div
+        id="start-overlay"
+        class="game-overlay"
+        role="dialog"
+        aria-modal="true"
+        aria-label="Start game"
+      >
+        <div class="game-dialog">
+          <button id="start-button" type="button" disabled>start</button>
         </div>
-        <div class="world-view">
-          <canvas
-            id="first-person-view"
-            width="1280"
-            height="720"
-            aria-label="Catch the mosquito by sound"
-          ></canvas>
+      </div>
 
-          <div
-            id="start-overlay"
-            class="game-overlay"
-            role="dialog"
-            aria-modal="true"
-            aria-label="Start game"
-          >
-            <div class="game-dialog">
-              <button id="start-button" type="button" disabled>start</button>
-            </div>
-          </div>
-
-          <div
-            id="caught-overlay"
-            class="game-overlay"
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="caught-title"
-            hidden
-          >
-            <div class="game-dialog">
-              <h2 id="caught-title">caught the mosquito!</h2>
-              <button id="try-again" type="button">try again</button>
-            </div>
-          </div>
+      <div
+        id="caught-overlay"
+        class="game-overlay"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="caught-title"
+        hidden
+      >
+        <div class="game-dialog caught-dialog">
+          <h2 id="caught-title">caught the mosquito!</h2>
+          <button id="try-again" type="button">try again</button>
         </div>
-      </article>
-    </section>
+      </div>
+    </div>
   </main>
 
   <script src="game/mosquito-code.js"></script>

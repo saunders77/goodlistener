@@ -24,13 +24,13 @@
   const MOSQUITO_PERIMETER_TURN_BUFFER = MOSQUITO_TURN_RADIUS * 4 + MOSQUITO_SPEED * FIXED_STEP;
   const MOSQUITO_PERIMETER_TEST_SECONDS = 2.25;
   const MOSQUITO_PERIMETER_TEST_STEP = 1 / 30;
-  const CATCH_DISTANCE_FEET = 0.5;
+  const CATCH_DISTANCE_FEET = 0.25;
   const CATCH_DISTANCE_UNITS = CATCH_DISTANCE_FEET * WORLD_UNITS_PER_FOOT;
 
-  const TREE_HEIGHT = 120;
+  const TREE_HEIGHT = 30;
   const ENTITY_HEIGHT = TREE_HEIGHT / 2;
   const TREE_EDGE_INSET = 18;
-  const TREE_SPACING = 38;
+  const TREE_SPACING = 9.5;
   const PLAYER_RADIUS = 10;
 
   const MAP_MOSQUITO_WIDTH = 10;
@@ -112,7 +112,7 @@
     firstPersonCtx.imageSmoothingEnabled = true;
 
     updateMosquitoAudio();
-    setAudioStatus("press start to begin the mosquito sound.");
+    //setAudioStatus("press start to begin the mosquito sound.");
 
     if (startButton) {
       startButton.disabled = false;
@@ -309,7 +309,6 @@
         drawBillboard(firstPersonCtx, mosquitoImage, item.projection);
       }
 
-      drawFirstPersonHud(firstPersonCtx);
     }
 
     function enableMosquitoAudio() {
@@ -320,11 +319,11 @@
           }
 
           audioRunning = true;
-          setAudioStatus("mosquito pitch includes the doppler shift from relative motion.");
+          //setAudioStatus("mosquito pitch includes the doppler shift from relative motion.");
         })
         .catch((error) => {
           console.error(error);
-          setAudioStatus("Audio could not be started in this browser.");
+          //setAudioStatus("Audio could not be started in this browser.");
         });
     }
 
@@ -338,7 +337,7 @@
       }
 
       enableMosquitoAudio();
-      setAudioStatus("mosquito pitch includes the doppler shift from relative motion.");
+      //setAudioStatus("mosquito pitch includes the doppler shift from relative motion.");
     }
 
     function createInitialBatState() {
@@ -494,6 +493,7 @@
       state.bat.velocityY = 0;
       state.mosquito.velocityX = 0;
       state.mosquito.velocityY = 0;
+      mosquitoAudio.setMuted(true);
 
       if (caughtOverlay) {
         caughtOverlay.hidden = false;
@@ -514,16 +514,17 @@
       input.backward = false;
       input.left = false;
       input.right = false;
+      mosquitoAudio.setMuted(false);
 
       if (caughtOverlay) {
         caughtOverlay.hidden = true;
       }
 
       updateMosquitoAudio();
-      setAudioStatus(audioRunning
+      /*setAudioStatus(audioRunning
         ? "mosquito pitch includes the doppler shift from relative motion."
         : "press start to begin the mosquito sound."
-      );
+      );*/
     }
 
     function updateMosquitoAudio() {
@@ -626,15 +627,6 @@
     };
   }
 
-  function drawFirstPersonHud(ctx) {
-    ctx.fillStyle = "rgba(6, 11, 20, 0.62)";
-    ctx.fillRect(18, 18, 452, 52);
-
-    ctx.fillStyle = "#eef6ff";
-    ctx.font = '14px "Trebuchet MS", "Lucida Sans Unicode", sans-serif';
-    ctx.fillText("mosquito pitch includes the doppler shift from relative motion", 32, 50);
-  }
-
   function drawStatus(ctx, title, detail) {
     const gradient = ctx.createLinearGradient(0, 0, 0, SCREEN_HEIGHT);
     gradient.addColorStop(0, "#08111e");
@@ -690,7 +682,7 @@
       return;
     }
 
-    audioStatus.innerHTML = `<strong>Audio:</strong> ${message}`;
+    audioStatus.textContent = message;
   }
 
   function getMosquitoSoundCode() {
